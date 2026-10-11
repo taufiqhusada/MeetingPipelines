@@ -11,21 +11,27 @@ Command examples (in any channel the bot is in):
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import socket
 import threading
+import time
 import traceback
 
+from . import brief as brief_mod
+from .coordinator import create_job, get_job
+from .llm import LLM
 from .runner import RunResult, make_scope, prepare
 
 TRIGGER = re.compile(r"\b(prep|brief|prepare)\b", re.I)
 HELP = ("*Meeting prep agent*\n"
         "• `@agent generate meeting prep`: brief for the last 14 days\n"
         "• `@agent generate meeting prep since 7d for \"Weekly sync\"`: custom window + meeting focus\n"
-        "Runs on the host's laptop: their Claude Code/Codex sessions, GitHub, Gmail and Drive.")
+        "The coordinator asks each online teammate's local worker for repo-scoped Claude/Codex context, "
+        "then combines it with shared GitHub, Gmail and Drive sources.")
 SOURCE_LABEL = {"claude_code": "Claude Code", "codex": "Codex", "github": "GitHub", "gmail": "Gmail",
-                "drive": "Drive", "local": "Local files"}
+                "drive": "Drive", "local": "Local files", "workers": "Local workers"}
 CHUNK = 3500  # stay well under Slack's per-message rendering limits
 
 
@@ -71,10 +77,11 @@ def source_summary(status: dict) -> str:
     bits = []
     for src, st in status.items():
         label = SOURCE_LABEL.get(src, src)
+        extra = f" ({st['reason']})" if st.get("reason") else ""
         if st.get("status") == "ok":
-            bits.append(f"{label} {st.get('items', 0)}")
+            bits.append(f"{label} {st.get('items', 0)}{extra}")
         else:
-            bits.append(f"{label} ⚠️ {st.get('status')}")
+            bits.append(f"{label} ⚠️ {st.get('status')}{extra}")
     return " · ".join(bits)
 
 
@@ -124,6 +131,82 @@ def parse_command(text: str) -> dict | None:
 
 # ---------------------------- bot ----------------------------
 
+def _collect_team_brief(scope, options: dict, llm_name: str = "claude") -> RunResult:
+    coordinator_url = os.getenv("MEETPIPE_COORDINATOR_URL", "")
+    coordinator_token = os.getenv("MEETPIPE_COORDINATOR_ADMIN_TOKEN", "")
+    timeout_seconds = int(os.getenv("MEETPIPE_JOB_TIMEOUT_SECONDS", "300"))
+    job = create_job(coordinator_url, coordinator_token, {
+        "since": options.get("since", "14d"), "repo": scope.repo, "meeting": scope.meeting,
+        "timeout_seconds": timeout_seconds,
+    })
+    print(f"Queued local context job {job['id']} for {len(job['workers'])} workers", flush=True)
+
+    # Gather common sources on the bot host while teammates retrieve their
+    # private agent history locally in parallel.
+    shared = prepare(scope, sources=["github", "gmail", "drive", "local"], llm_name=llm_name,
+                     log=lambda line: print(line, flush=True))
+    deadline = float(job["deadline"])
+    view = {"workers": []}
+    while time.time() < deadline:
+        view = get_job(coordinator_url, coordinator_token, job["id"])
+        if view.get("status") == "complete":
+            break
+        time.sleep(2)
+    if view.get("status") != "complete":
+        view = get_job(coordinator_url, coordinator_token, job["id"])
+
+    briefs, index = {}, {}
+    if shared.brief:
+        briefs["shared"] = shared.brief
+        index.update({f"shared:{k}": v for k, v in shared.index.items()})
+    worker_rows = view.get("workers", [])
+    completed = []
+    responded = []
+    for row in worker_rows:
+        worker_id, payload = row["worker_id"], row.get("result") or {}
+        if row["status"] == "complete":
+            responded.append(worker_id)
+        if row["status"] == "complete" and payload.get("brief"):
+            briefs[worker_id] = payload["brief"]
+            index.update({f"{worker_id}:{k}": v for k, v in payload.get("index", {}).items()})
+            completed.append(worker_id)
+
+    source_status = dict(shared.status)
+    for source in ("claude_code", "codex"):
+        counts = [int((r.get("result") or {}).get("status", {}).get(source, {}).get("items", 0))
+                  for r in worker_rows if r.get("status") == "complete"]
+        source_status[source] = {"status": "ok" if any(counts) else "skipped", "items": sum(counts)}
+    source_status["workers"] = {
+        "status": "ok" if responded else "error",
+        "items": len(responded),
+        "reason": f"{len(responded)} of {len(worker_rows)} responded; "
+                  f"{len(completed)} returned context"
+                  + (f" ({', '.join(completed)})" if completed else ""),
+    }
+    if not briefs:
+        shared.status = source_status
+        return shared
+    if len(briefs) == 1:
+        final_brief = next(iter(briefs.values()))
+        # The one source's citation IDs remain unprefixed.
+        final_index = {k.split(":", 1)[1]: v for k, v in index.items()}
+    else:
+        final_brief = brief_mod.aggregate(briefs, LLM(llm_name))
+        final_index = index
+
+    title = f"Team pre-meeting brief: {scope.meeting or scope.repo or 'project sync'}"
+    final_md = brief_mod.to_markdown(final_brief, final_index, title)
+    missing = [f"{r['worker_id']} ({r['status']})" for r in worker_rows if r['status'] != "complete"]
+    missing += [f"{r['worker_id']} (no matching context)" for r in worker_rows
+                if r['status'] == "complete" and not (r.get("result") or {}).get("brief")]
+    if missing:
+        final_md += "\n\n---\n_Coverage: no result from " + ", ".join(missing) + "._"
+    (shared.run_dir / "brief.json").write_text(json.dumps(final_brief, indent=2, ensure_ascii=False))
+    (shared.run_dir / "brief.md").write_text(final_md)
+    return RunResult(run_dir=shared.run_dir, status=source_status, index=final_index,
+                     brief=final_brief, markdown=final_md, title=title)
+
+
 def serve(path: str = ".", llm_name: str = "claude") -> None:
     from slack_bolt import App
     from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -131,15 +214,19 @@ def serve(path: str = ".", llm_name: str = "claude") -> None:
     app = App(token=os.environ["SLACK_BOT_TOKEN"])
     busy = threading.Lock()
     host = socket.gethostname().split(".")[0]
+    coordinator_url = os.getenv("MEETPIPE_COORDINATOR_URL", "")
+    coordinator_token = os.getenv("MEETPIPE_COORDINATOR_ADMIN_TOKEN", "")
+    if not coordinator_url or not coordinator_token:
+        raise RuntimeError("Set MEETPIPE_COORDINATOR_URL and MEETPIPE_COORDINATOR_ADMIN_TOKEN for the Slack bot")
 
     def run_job(channel: str, thread_ts: str, user: str, opts: dict, client) -> None:
         status_msg = client.chat_postMessage(
             channel=channel, thread_ts=thread_ts,
-            text=f"On it <@{user}>! Gathering context on `{host}` (Claude Code, Codex, GitHub, Gmail, Drive) "
-                 f"since {opts.get('since', '14d')}… this takes 1–3 minutes.")
+            text=f"On it <@{user}>! Asking online local workers for Claude/Codex context, while gathering "
+                 f"shared sources since {opts.get('since', '14d')}…")
         try:
             scope = make_scope(path, opts.get("since", "14d"), meeting=opts.get("meeting"))
-            result = prepare(scope, llm_name=llm_name, log=lambda line: print(line, flush=True))
+            result = _collect_team_brief(scope, opts, llm_name)
             if not result.markdown:
                 client.chat_update(channel=channel, ts=status_msg["ts"],
                                    text=f"Couldn't build a brief: no context found. {source_summary(result.status)}")

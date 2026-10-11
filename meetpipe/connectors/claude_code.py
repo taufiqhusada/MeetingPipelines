@@ -33,37 +33,38 @@ def _candidate_files(scope: RunScope) -> list[Path]:
 
 def _parse(file: Path, scope: RunScope) -> SessionDigest | None:
     s = SessionDigest()
-    for line in file.open(encoding="utf-8", errors="replace"):
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        rtype = rec.get("type")
-        if rtype == "ai-title":
-            s.title = rec.get("title") or rec.get("aiTitle") or s.title
-            continue
-        if rtype not in ("user", "assistant"):
-            continue
-        ts = parse_ts(rec.get("timestamp"))
-        if not ts or ts < scope.since or not in_scope(rec.get("cwd"), scope.path):
-            continue
-        s.touch(ts)
-        s.cwd = s.cwd or rec.get("cwd")
-        s.branch = rec.get("gitBranch") or s.branch
-        content = (rec.get("message") or {}).get("content")
-        if isinstance(content, str):
-            (s.user if rtype == "user" else s.assistant)(content)
-            continue
-        for block in content or []:
-            bt = block.get("type")
-            if bt == "text":
-                (s.user if rtype == "user" else s.assistant)(block.get("text", ""))
-            elif bt == "tool_use":
-                name, inp = block.get("name"), block.get("input") or {}
-                if name in EDIT_TOOLS:
-                    s.file(inp.get("file_path") or inp.get("notebook_path"))
-                elif name == "Bash":
-                    s.command(inp.get("command", ""))
+    with file.open(encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            rtype = rec.get("type")
+            if rtype == "ai-title":
+                s.title = rec.get("title") or rec.get("aiTitle") or s.title
+                continue
+            if rtype not in ("user", "assistant"):
+                continue
+            ts = parse_ts(rec.get("timestamp"))
+            if not ts or ts < scope.since or not in_scope(rec.get("cwd"), scope.path):
+                continue
+            s.touch(ts)
+            s.cwd = s.cwd or rec.get("cwd")
+            s.branch = rec.get("gitBranch") or s.branch
+            content = (rec.get("message") or {}).get("content")
+            if isinstance(content, str):
+                (s.user if rtype == "user" else s.assistant)(content)
+                continue
+            for block in content or []:
+                bt = block.get("type")
+                if bt == "text":
+                    (s.user if rtype == "user" else s.assistant)(block.get("text", ""))
+                elif bt == "tool_use":
+                    name, inp = block.get("name"), block.get("input") or {}
+                    if name in EDIT_TOOLS:
+                        s.file(inp.get("file_path") or inp.get("notebook_path"))
+                    elif name == "Bash":
+                        s.command(inp.get("command", ""))
     return s if s.turns else None
 
 

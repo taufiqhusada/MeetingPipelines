@@ -21,7 +21,8 @@ def aggregate(briefs: dict[str, dict], llm: LLM) -> dict:
     labelled = {}
     for label, brief in briefs.items():
         b = json.loads(json.dumps(brief))
-        for section in ("progress", "commitments", "gaps", "action_items", "open_questions"):
+        for section in ("progress", "commitments", "gaps", "dependencies_and_conflicts",
+                        "action_items", "open_questions"):
             for entry in b.get(section, []):
                 entry["evidence"] = [f"{label}:{e}" for e in entry.get("evidence", [])]
                 if entry.get("made_in"):
