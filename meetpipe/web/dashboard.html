@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meeting Pipelines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.3/dist/3d-force-graph.min.js"></script>
+<style>
+:root{
+  --bg:#f6f8fc; --paper-2:#eaf0fa; --panel:rgba(255,255,255,.78); --panel-solid:#ffffff; --line:#dfe5ef; --line-2:#c9d3e4;
+  --ink:#141a26; --ink-2:#4a5468; --mute:#8a93a6; --blue:#2f6bff; --cyan:#2f6bff; --blue-soft:#e3ecff; --term:#141821;
+  --ok:#1f9d63; --warn:#c98a12; --err:#d9473b;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace; --sans:Inter,-apple-system,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);overflow:hidden}
+body::before{content:"";position:fixed;inset:-20%;pointer-events:none;z-index:0;
+  background:radial-gradient(42% 40% at 20% 24%,rgba(80,140,255,.30),transparent 70%),
+             radial-gradient(40% 36% at 84% 84%,rgba(120,175,255,.22),transparent 70%)}
+.caps{font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em;font-size:10.5px;color:var(--mute)}
+a{color:inherit}
+
+header{position:relative;z-index:10;display:flex;align-items:center;gap:18px;padding:14px 22px;flex-wrap:wrap}
+.brand{font:500 13px var(--mono);letter-spacing:.08em;display:flex;align-items:center;gap:10px}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px var(--blue-soft)}
+.tabs{display:flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;backdrop-filter:blur(8px)}
+.tabs button{all:unset;cursor:pointer;font:500 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:7px 15px;border-radius:999px;color:var(--ink-2)}
+.tabs button.on{background:var(--ink);color:#fff}
+.controls{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.controls select,.controls input{font:13px var(--sans);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 13px;color:var(--ink);outline:none}
+.controls input{width:220px}.controls input::placeholder{color:var(--mute)}
+.btn{all:unset;cursor:pointer;background:var(--ink);color:#fff;font:500 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:10px 17px;border-radius:999px}
+.btn:hover{background:#000}.btn[disabled]{opacity:.4;cursor:default}
+.btn.ghost{background:transparent;border:1px solid var(--line-2);color:var(--ink-2)}
+.status{font:500 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:7px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--ink-2);display:flex;gap:8px;align-items:center}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--mute)}
+.status.running i{background:var(--blue);animation:blink 1s infinite}.status.done i{background:var(--ok)}.status.error i{background:var(--err)}
+@keyframes blink{50%{opacity:.25}}
+
+main{position:relative;z-index:1;height:calc(100% - 66px)}
+.view{position:absolute;inset:0;display:none}.view.on{display:block}
+
+#graph{position:absolute;inset:0}
+.scene-tooltip:empty{display:none!important}
+.scene-tooltip{font:12px var(--sans)!important;background:#fff!important;border:1px solid var(--line-2);border-radius:10px;padding:7px 10px!important;color:var(--ink)!important;max-width:320px;box-shadow:0 10px 30px -18px rgba(20,30,60,.4)}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--ink-2);pointer-events:none;z-index:2}
+.empty h2{font:500 24px var(--sans);color:var(--ink);margin:0 0 8px}
+.hint{position:absolute;left:22px;bottom:16px;z-index:3;display:flex;gap:16px;align-items:center;font:10.5px var(--mono);color:var(--mute);text-transform:uppercase;letter-spacing:.08em}
+.hint span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:-1px;background:var(--c)}
+#now{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:10px;
+  background:#141821;color:#e6e9f0;font:500 13px var(--mono);padding:9px 16px 9px 12px;border-radius:999px;box-shadow:0 14px 30px -16px rgba(10,20,40,.6);white-space:nowrap}
+#now.on{display:flex}#now .ic{width:26px;height:26px;border-radius:50%;background:#262e3f;display:grid;place-items:center}
+#now .who{color:#8e96a8;text-transform:uppercase;letter-spacing:.08em;font-size:11px}#now .n{color:#7fa8ff}
+#now .spin{width:12px;height:12px;border-radius:50%;border:2px solid #3a4560;border-top-color:#7fa8ff;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#floats{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
+.fl{position:absolute;transform:translate(10px,-50%);background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 11px 4px 5px;
+  font:500 10.5px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink);white-space:nowrap;display:flex;gap:7px;align-items:center;
+  box-shadow:0 8px 18px -12px rgba(20,30,60,.5);animation:flin .35s ease-out;transition:opacity .6s}
+.fl .ic{width:18px;height:18px;border-radius:50%;background:#141821;display:grid;place-items:center}.fl .ic svg{width:11px;height:11px}
+.fl .k{color:var(--mute)}
+@keyframes flin{from{opacity:0;transform:translate(0,-50%) scale(.9)}}
+.progress{position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:3;display:flex;gap:6px;align-items:center}
+.progress .step{font:500 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
+.progress .step.on{color:#fff;background:var(--blue);border-color:var(--blue)}
+.progress .step.done{color:var(--ok);border-color:#bfe3cf}
+.progress .sep{width:16px;height:1px;background:var(--line-2)}
+
+#side{position:absolute;top:44px;right:16px;bottom:16px;width:330px;overflow:auto;display:flex;flex-direction:column;gap:10px;z-index:3;padding-right:2px}
+#side::-webkit-scrollbar,#drawer::-webkit-scrollbar{width:6px}#side::-webkit-scrollbar-thumb,#drawer::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:9px}
+.term{background:var(--term);border-radius:14px;padding:11px 13px;font:11.5px/1.6 var(--mono);color:#e6e9f0;cursor:pointer;box-shadow:0 14px 30px -18px rgba(10,20,40,.6);transition:transform .15s}
+.term:hover{transform:translateY(-1px)}.term.sel{outline:2px solid var(--blue)}
+.term .hd{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#8e96a8;border-bottom:1px solid #2a2f3b;padding-bottom:7px;margin-bottom:7px}
+.term .hd .av{width:22px;height:22px;font-size:10px}
+.term .hd b{color:#fff;font-weight:500}
+.term .st{margin-left:auto;font-size:9.5px;padding:2px 8px;border-radius:999px;background:#232836}
+.st.running,.st.gathering,.st.summarizing,.st.merging,.st.queued{color:#7fa8ff}.st.complete,.st.done{color:#6fd3a0}.st.failed,.st.timed_out,.st.error{color:#ff8a7e}
+.term .ln{flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#b9c0cf}
+.term .ln .p{color:#6b7385}.term .ln .n{color:#7fa8ff}
+.term .ln.new{animation:in .35s ease-out}
+.term .body{max-height:132px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+@keyframes in{from{opacity:0;transform:translateY(4px)}}
+
+#drawer{position:absolute;left:18px;top:44px;width:370px;max-height:calc(100% - 90px);overflow:auto;z-index:4;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);
+  border:1px solid var(--line);border-radius:18px;padding:16px 18px;box-shadow:0 24px 50px -28px rgba(20,30,60,.45);display:none}
+#drawer.on{display:block;animation:in .2s}
+#drawer .x{float:right;cursor:pointer;color:var(--mute);font-size:16px;line-height:1}
+#drawer .x:hover{color:var(--ink)}
+#drawer h3{margin:6px 0 4px;font:600 17px/1.3 var(--sans)}
+#drawer .sub{color:var(--ink-2);font-size:12.5px;margin-bottom:10px}
+#drawer .row{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px dashed var(--line);font-size:13px}
+#drawer .row .ic{width:24px;height:24px;flex:none;border-radius:8px;display:grid;place-items:center;background:var(--term)}
+#drawer .row a{text-decoration:none}#drawer .row a:hover{color:var(--blue)}
+#drawer .sec{margin-top:12px}
+#drawer .tag{font:500 9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:var(--paper-2);color:var(--ink-2);white-space:nowrap}
+#drawer .tag.cited{background:var(--blue-soft);color:var(--blue)}
+#drawer .link{cursor:pointer}#drawer .link:hover{color:var(--blue)}
+.icon{width:16px;height:16px;display:block}
+
+#brief,#tasks{height:100%;overflow:auto;padding:6px 22px 40px}
+.wrap{max-width:1200px;margin:0 auto}
+.goal{background:var(--ink);color:#fff;border-radius:22px;padding:26px 30px;margin:8px 0 20px;position:relative;overflow:hidden}
+.goal .caps{color:#9fb0cf}.goal p{font:500 22px/1.35 var(--sans);margin:8px 0 0;max-width:920px}
+.goal::after{content:"";position:absolute;right:-70px;top:-70px;width:260px;height:260px;border-radius:50%;background:radial-gradient(var(--blue),transparent 65%);opacity:.55}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+.person{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 18px 10px;transition:transform .15s,box-shadow .15s}
+.person:hover{transform:translateY(-2px);box-shadow:0 18px 40px -26px rgba(20,30,60,.45)}
+.who{display:flex;align-items:center;gap:11px;margin-bottom:6px}
+.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:600 12.5px var(--sans);background:var(--blue-soft);color:#1d4fd1;flex:none}
+.who b{font-size:16px;font-weight:600}.who .btn{margin-left:auto;padding:6px 11px;font-size:10px}
+.bucket{margin:12px 0 2px}.bucket .caps{display:flex;align-items:center;gap:7px}
+.bucket .caps::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}
+.bucket ul{margin:6px 0 0;padding:0;list-style:none}
+.bucket li{padding:7px 0;border-top:1px dashed var(--line);display:flex;gap:10px;align-items:flex-start}
+.chip{font:500 10.5px var(--mono);padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2);background:var(--bg);text-decoration:none;white-space:nowrap;margin-left:auto;cursor:pointer;align-self:center}
+.chip:hover{background:var(--blue-soft);border-color:var(--blue);color:var(--blue)}
+.decide{margin-top:20px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 20px}
+.decide h3,.full h3{margin:0 0 6px;font:600 16px var(--sans)}
+.decide label{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px dashed var(--line);cursor:pointer}
+.decide input{accent-color:var(--blue);margin-top:4px;width:15px;height:15px}
+.decide label.done span{text-decoration:line-through;color:var(--mute)}
+.full{margin-top:16px}.full summary{cursor:pointer;font:500 11.5px var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);padding:10px 0}
+.full .sec{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 18px;margin-bottom:12px}
+.full ul{padding-left:18px}.full li{margin:7px 0}
+.badge{font:500 9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:var(--paper-2);color:var(--ink-2)}
+.badge.done{background:#ddf3e7;color:var(--ok)}.badge.in_progress{background:var(--blue-soft);color:var(--blue)}
+.badge.no_evidence,.badge.high{background:#fbe1de;color:var(--err)}.badge.medium{background:#fbf0d9;color:var(--warn)}
+#tip{position:fixed;pointer-events:none;z-index:50;background:var(--ink);color:#fff;font:12px var(--sans);padding:7px 10px;border-radius:9px;max-width:320px;display:none}
+.note{color:var(--mute);margin:40px auto;text-align:center}
+
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 16px}
+.filters button{all:unset;cursor:pointer;font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink-2)}
+.filters button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.board{display:grid;grid-template-columns:repeat(4,minmax(250px,1fr));gap:14px;align-items:start}
+.col{background:rgba(255,255,255,.55);border:1px solid var(--line);border-radius:18px;padding:12px;min-height:240px;transition:background .15s}
+.col.over{background:var(--blue-soft);border-color:var(--blue)}
+.col h4{margin:2px 4px 12px;display:flex;justify-content:space-between;align-items:center}
+.col h4 .caps::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px;background:var(--c)}
+.col h4 .n{font:500 11px var(--mono);color:var(--mute)}
+.task{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;cursor:grab;transition:box-shadow .15s,transform .15s}
+.task:hover{transform:translateY(-1px);box-shadow:0 12px 26px -20px rgba(20,30,60,.5)}
+.task.ro{cursor:default}
+.task .t{font-weight:500;margin-bottom:9px}
+.task .meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.task .av{width:24px;height:24px;font-size:10px}
+.flag{font:500 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:#fbe1de;color:var(--err)}
+.org{font:500 9.5px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin-left:auto}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span>MEETING · PIPELINES</div>
+  <nav class="tabs">
+    <button data-v="context" class="on">Context graph</button>
+    <button data-v="brief">Brief</button>
+    <button data-v="tasks">Tasks</button>
+  </nav>
+  <div class="controls">
+    <select id="since"><option value="7d">Last 7 days</option><option value="14d" selected>Last 14 days</option><option value="30d">Last 30 days</option></select>
+    <input id="meeting" placeholder="Meeting, e.g. Weekly sync">
+    <button class="btn" id="go">▶ Generate prep</button>
+    <span class="status" id="status"><i></i><span>idle</span></span>
+  </div>
+</header>
+
+<main>
+  <section class="view on" id="v-context">
+    <div id="graph"></div>
+    <div class="empty" id="empty"><div><h2>No run yet</h2>Press <b>Generate prep</b> and watch every laptop's context flow into the team brief.</div></div>
+    <div class="progress" id="progress"></div>
+    <div id="floats"></div>
+    <div id="now"></div>
+    <div id="drawer"></div>
+    <aside id="side"></aside>
+    <div class="hint"><span style="--c:#9aa3b5">waiting</span><span style="--c:#2f6bff">fetching</span><span style="--c:#1f9d63">done</span><span style="--c:#d9473b">failed</span>
+      <span style="--c:transparent;margin-left:8px">drag to orbit · scroll to zoom · click any node</span></div>
+  </section>
+  <section class="view" id="v-brief"><div id="brief"><div class="note">The brief appears here when a run finishes.</div></div></section>
+  <section class="view" id="v-tasks"><div id="tasks"></div></section>
+</main>
+<div id="tip"></div>
+
+<script>
+/* ======================= icons ======================= */
+// 24×24 stroke icons. Colors are app-recognizable accents on the blue theme.
+const ICON = {
+  claude_code:{c:"#ff9a6b", p:'<path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3 5.3 18.7"/>'},
+  codex:      {c:"#e7ecf7", p:'<rect x="2.5" y="4" width="19" height="16" rx="3"/><path d="m7 9.5 3 2.5-3 2.5M12.5 15h4.5"/>'},
+  gmail:      {c:"#ff6b6b", p:'<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>'},
+  drive:      {c:"#4ade80", p:'<path d="M8.5 3.5h7l6 10.5-3.5 6h-12L2.5 14z"/><path d="M8.5 3.5 15 14.5M15.5 3.5 9 14.5M2.5 14h19"/>'},
+  fireflies:  {c:"#b18cff", p:'<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>'},
+  github:     {c:"#e7ecf7", p:'<circle cx="6" cy="5.5" r="2.3"/><circle cx="6" cy="18.5" r="2.3"/><circle cx="18" cy="8" r="2.3"/><path d="M6 7.8v8.4M18 10.3c0 4-6 3.5-10.2 6.6"/>'},
+  local:      {c:"#9fb0d0", p:'<path d="M6 2.5h8l5 5v14H6z"/><path d="M14 2.5v5h5"/>'},
+  after:      {c:"#7fa8ff", p:'<path d="M4 6.5l2 2 3.5-3.5M4 13.5l2 2 3.5-3.5M12.5 7h7.5M12.5 14h7.5M4 20.5h16"/>'},
+  person:     {c:"#cfe0ff", p:'<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 4.5-6.5 8-6.5s6.5 2 8 6.5"/>'},
+  master:     {c:"#cfe0ff", p:'<rect x="3" y="3.5" width="18" height="6.5" rx="2"/><rect x="3" y="14" width="18" height="6.5" rx="2"/><path d="M7 6.8h.01M7 17.3h.01"/>'},
+  brief:      {c:"#ffffff", p:'<path d="M12 2.5l2.2 6.3 6.3 2.2-6.3 2.2L12 19.5l-2.2-6.3L3.5 11l6.3-2.2z"/>'},
+  decision:   {c:"#7fa8ff", p:'<path d="M12 3 21 12l-9 9-9-9z"/><path d="m8.5 12 2.5 2.5 4.5-4.5"/>'},
+  item:       {c:"#9cc0ff", p:'<circle cx="12" cy="12" r="5"/>'},
+};
+const svgIcon = (k, size = 16, color) => { const i = ICON[k] || ICON.item;
+  return `<svg class="icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color || i.c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${i.p}</svg>`; };
+const IMG = {};
+function loadIcons(){ return Promise.all(Object.keys(ICON).map(k => new Promise(res => {
+  const im = new Image(); im.onload = () => { IMG[k] = im; res(); }; im.onerror = res;
+  im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgIcon(k, 96).replace('class="icon" ', 'xmlns="http://www.w3.org/2000/svg" ')); }))); }
+
+/* ======================= state ======================= */
+const SRC = {claude_code:"Claude Code",codex:"Codex",gmail:"Gmail",drive:"Drive",fireflies:"Fireflies",github:"GitHub",local:"Local files",after:"After records"};
+const KIND = {session:"Session",pr:"Pull request",issue:"Issue",commit:"Commits",meeting:"Meeting",doc:"Doc"};
+let CFG = {people:{}}, RUN = null, after = 0, timer = null;
+const S = {actors:new Map(), sources:new Map(), stage:"idle", lines:new Map()};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const name = id => id === "master" ? "Shared sources" : (CFG.people[id] || id.charAt(0).toUpperCase() + id.slice(1));
+const initials = n => n.split(/\s+/).map(p => p[0]).join("").slice(0,2).toUpperCase();
+
+/* ======================= tabs + run control ======================= */
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => show(b.dataset.v));
+function show(v){
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  document.querySelectorAll(".view").forEach(s => s.classList.toggle("on", s.id === "v-" + v));
+  if (v === "tasks") loadTasks();
+  if (v === "context") setTimeout(resize, 0);
+}
+$("#go").onclick = async () => {
+  const r = await fetch("/api/runs", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({since:$("#since").value, meeting:$("#meeting").value})});
+  const j = await r.json(); if (!r.ok && !j.id) return alert(j.error);
+  resetAll(); G.live = true; attach(j.id); show("context");
+};
+function attach(id){ clearInterval(timer); timer = setInterval(() => poll(id), 500); poll(id); }
+async function poll(id){
+  const r = await fetch(`/api/runs/${id}?after=${after}`); if (!r.ok) return;
+  const run = await r.json(); RUN = run;
+  run.events.forEach(apply); after += run.events.length;
+  setStatus(run.status, run.status === "running" ? stageLabel() : run.status === "done" ? "brief ready" : (run.error || run.status));
+  $("#go").disabled = run.status === "running";
+  if (run.status !== "running"){ clearInterval(timer); if (run.brief){ S.stage = "done"; renderBrief(run); now("brief", "team brief", "ready · click the center to read it", false); setTimeout(() => $("#now").classList.remove("on"), 6000); }
+    else if (run.status === "error") now("brief", "error", esc(run.error || "run failed"), false); }
+  syncGraph(); renderSide(); renderProgress();
+}
+function setStatus(cls, text){ $("#status").className = "status " + cls; $("#status").lastElementChild.textContent = text; }
+function stageLabel(){ const n = [...S.actors.values()].filter(a => a.id !== "master" && ["running","gathering","summarizing"].includes(a.status)).length;
+  return S.stage === "merging" ? "merging briefs" : n ? `${n} laptop${n > 1 ? "s" : ""} working` : "gathering"; }
+
+/* ======================= events → state ======================= */
+function actor(id){ if (!S.actors.has(id)) S.actors.set(id, {id, status: id === "master" ? "gathering" : "queued", sources: []}); return S.actors.get(id); }
+function line(id, html){ (S.lines.get(id) || S.lines.set(id, []).get(id)).push(html); }
+function now(icon, who, html, busy = true){ $("#now").innerHTML = `${busy ? '<span class="spin"></span>' : ""}<span class="ic">${svgIcon(icon, 15)}</span><span class="who">${esc(who)}</span><span>${html}</span>`; $("#now").classList.add("on"); }
+function apply(e){
+  const a = e.actor || "master";
+  if (e.kind === "job"){ S.stage = "gathering"; actor("master"); e.workers.forEach(w => { actor(w); line(w, `<span class="p">›</span> waiting for job`); });
+    line("master", `<span class="p">›</span> asked <span class="n">${e.workers.length}</span> laptops for context`); now("master", "master", `asking <span class="n">${e.workers.length}</span> laptops for context`); return; }
+  if (e.kind === "worker_status"){ actor(a).status = e.status; if (!["running"].includes(e.status)) line(a, `<span class="p">↳</span> ${esc(e.status.replace("_"," "))}`); return; }
+  if (e.kind === "stage"){
+    if (a === "team"){ if (e.stage === "error") S.stage = "error"; return; }
+    if (a === "master" && e.stage === "merging"){ S.stage = "merging"; actor("master").status = "merging"; line("master", `<span class="p">›</span> merging <span class="n">${e.briefs.length}</span> briefs…`);
+      now("brief", "team brief", `merging <span class="n">${e.briefs.length}</span> briefs into one`); return; }
+    if (a === "master" && e.stage === "waiting_workers"){ line("master", `<span class="p">›</span> waiting for laptops`); return; }
+    const act = actor(a);
+    if (["gathering","summarizing"].includes(e.stage)){ act.status = e.stage; line(a, `<span class="p">›</span> ${e.stage}${e.items ? ` <span class="n">${e.items}</span> items` : ""}`);
+      if (e.stage === "summarizing") now(a === "master" ? "master" : "person", name(a), `summarizing <span class="n">${e.items || ""}</span> items with ${esc(CFG.llm || "claude")}`); }
+    if (e.stage === "done" && a !== "master") now("person", name(a), `brief sent to master ✓`, false);
+    if (e.stage === "done" && a !== "master") act.status = "complete";
+    return;
+  }
+  if (e.kind === "source"){
+    const key = a + "/" + e.source, act = actor(a);
+    if (!act.sources.includes(e.source)) act.sources.push(e.source);
+    const prev = S.sources.get(key) || {actor:a, source:e.source, titles:[]};
+    S.sources.set(key, {...prev, state:e.state, items:e.items ?? prev.items, titles:e.titles || prev.titles, reason:e.reason});
+    if (e.state === "fetching"){ line(a, `<span class="p">›</span> reading ${SRC[e.source] || e.source}…`); now(e.source, name(a), `reading ${SRC[e.source] || e.source}…`); }
+    else { if (e.state === "ok") now(e.source, name(a), `${SRC[e.source] || e.source} → <span class="n">${e.items}</span> items`, false); line(a, `<span class="p">›</span> ${SRC[e.source] || e.source} <span class="p">↳</span> ${e.state === "ok" ? `<span class="n">${e.items}</span> items` : esc(e.state)}`); }
+    return;
+  }
+  if (e.kind === "log") line("master", esc(e.text));
+}
+function resetAll(){
+  S.actors.clear(); S.sources.clear(); S.lines.clear(); S.stage = "idle"; after = 0; RUN = null; briefLinked = false; focusSet = null;
+  G.nodes.length = 0; G.links.length = 0; G.byId.clear(); selected = null;
+  graph && graph.graphData({nodes:[], links:[]}); $("#side").innerHTML = ""; closeDrawer();
+  $("#brief").innerHTML = `<div class="note">The brief appears here when the run finishes.</div>`;
+  $("#now").classList.remove("on"); $("#floats").innerHTML = "";
+}
+
+/* ======================= 3D graph ======================= */
+let graph = null, selected = null, idle = 0, briefLinked = false, focusSet = null;
+const G = {nodes:[], links:[], byId:new Map()};
+const COLOR = {queued:"#9aa3b5", fetching:"#2f6bff", gathering:"#2f6bff", running:"#2f6bff", summarizing:"#2f6bff", merging:"#2f6bff",
+               ok:"#1f9d63", complete:"#1f9d63", done:"#1f9d63", skipped:"#b8bfcc", error:"#d9473b", failed:"#d9473b", timed_out:"#d9473b"};
+const ACTIVE = s => ["fetching","gathering","running","summarizing","merging"].includes(s);
+
+function texture(draw, w, h){
+  const c = document.createElement("canvas"), r = 2; c.width = w*r; c.height = h*r;
+  const x = c.getContext("2d"); x.scale(r, r); draw(x, w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+function roundRect(x, X, Y, W, H, R){ x.beginPath(); x.moveTo(X+R, Y); x.arcTo(X+W, Y, X+W, Y+H, R); x.arcTo(X+W, Y+H, X, Y+H, R); x.arcTo(X, Y+H, X, Y, R); x.arcTo(X, Y, X+W, Y, R); x.closePath(); }
+let GLOW = null;
+function glowTexture(){ return GLOW || (GLOW = texture((x, w, h) => { const g = x.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+  g.addColorStop(0, "rgba(255,255,255,.75)"); g.addColorStop(.35, "rgba(255,255,255,.25)"); g.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = g; x.fillRect(0, 0, w, h); }, 128, 128)); }
+
+// Nodes are pills that always face the camera: [icon] KIND  LABEL, like the 2D design, with a soft blue halo when active.
+function makeObject(n){
+  // All sprites use sizeAttenuation:false → same on-screen size at any depth (scale is in screen units).
+  const group = new THREE.Group(), st = n.status || "queued", col = COLOR[st] || "#2f6bff", faded = st === "skipped" || st === "queued";
+  const sprite = (map, w, h, opacity = 1) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map, transparent:true, depthWrite:false, depthTest:false, sizeAttenuation:false, opacity}));
+    sp.scale.set(w, h, 1); group.add(sp); return sp; };
+  if (n.type === "center"){
+    const glow = sprite(glowTexture(), .32, .32, .4); glow.material.color.set("#2f6bff");
+    group.userData = {glow, active:ACTIVE(st), base:.32, glowOpacity:.4};
+    sprite(texture((x, w, h) => { x.fillStyle = st === "done" ? "#1f9d63" : "#141a26"; x.beginPath(); x.arc(w/2, h/2, w/2-4, 0, Math.PI*2); x.fill();
+      x.fillStyle = "#fff"; x.textAlign = "center"; x.font = "500 19px 'JetBrains Mono'"; x.fillText("TEAM", w/2, h/2 - 4); x.fillText("BRIEF", w/2, h/2 + 20); }, 128, 128), .085, .085);
+    const cap = (n.sub || "").toUpperCase(), cw = 420, ch = 40;
+    const caption = sprite(texture((x) => { x.font = "500 16px 'JetBrains Mono'"; const tw = x.measureText(cap).width + 30, X = (cw - tw)/2;
+      x.fillStyle = st === "done" ? "#1f9d63" : "#2f6bff"; roundRect(x, X, 6, tw, ch - 12, (ch - 12)/2); x.fill();
+      x.fillStyle = "#fff"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(cap, cw/2, ch/2 + 1); }, cw, ch), .03 * cw/ch, .03);
+    caption.center.set(.5, 2.1);   // sits just below the core on screen
+    return group;
+  }
+  const glow = sprite(glowTexture(), .1, .1, ACTIVE(st) ? .45 : 0); glow.material.color.set(col);
+  group.userData = {glow, active:ACTIVE(st), base:.1, glowOpacity:glow.material.opacity};
+  const dark = n.type === "hub", key = n.type === "source" ? n.src : n.type === "hub" ? (n.actor === "master" ? "master" : "person") : "decision";
+  if (n.type === "source" && faded && st === "skipped"){   // nothing found: just a faint icon, label on hover
+    sprite(texture((x, w, h) => { x.globalAlpha = .45; x.fillStyle = "#141821"; x.beginPath(); x.arc(w/2, h/2, w/2-2, 0, Math.PI*2); x.fill();
+      if (IMG[key]) x.drawImage(IMG[key], w*.22, h*.22, w*.56, h*.56); }, 48, 48), .018, .018);
+    return group;
+  }
+  const WORD = {queued:"waiting", gathering:"reading", running:"reading", summarizing:"summarizing", merging:"merging", complete:"done ✓", done:"done ✓", fetching:"reading", failed:"failed", timed_out:"no reply", error:"error"};
+  const kind = (n.type === "decision" ? "decide" : n.type === "hub" ? (WORD[st] || st || "") : st === "ok" ? "" : (WORD[st] || st || "")).toUpperCase();
+  const label = (n.label + (n.type === "source" && n.count != null ? "  " + n.count : "")).toUpperCase();
+  const H = 44, W = 560;
+  let pw = 0;
+  const tex = texture((x) => {
+    x.font = "500 13px 'JetBrains Mono'"; const kw = kind ? x.measureText(kind).width + 12 : 0;
+    x.font = "500 17px 'JetBrains Mono'"; const lw = Math.min(x.measureText(label).width, 400);
+    pw = 14 + 26 + 10 + kw + lw + 18; const X = (W - pw)/2;
+    x.shadowColor = "rgba(20,30,60,.16)"; x.shadowBlur = 10; x.shadowOffsetY = 2;
+    x.fillStyle = dark ? "#141a26" : "#ffffff"; roundRect(x, X, 6, pw, H - 12, (H - 12)/2); x.fill(); x.shadowColor = "transparent";
+    x.strokeStyle = dark ? "#141a26" : (ACTIVE(st) ? col : "#dfe5ef"); x.lineWidth = ACTIVE(st) ? 2 : 1.2; x.stroke();
+    x.fillStyle = dark ? "#262e3f" : "#141821"; x.beginPath(); x.arc(X + 27, H/2, 13, 0, Math.PI*2); x.fill();
+    if (IMG[key]) x.drawImage(IMG[key], X + 18, H/2 - 9, 18, 18);
+    if (!dark && st !== "queued"){ x.fillStyle = col; x.beginPath(); x.arc(X + 37, H/2 - 9, 4, 0, Math.PI*2); x.fill(); }
+    let tx = X + 50; x.textBaseline = "middle";
+    if (kind){ x.font = "500 13px 'JetBrains Mono'"; x.fillStyle = dark ? "#8e9ab5" : "#8a93a6"; x.fillText(kind, tx, H/2 + 1); tx += kw; }
+    x.font = "500 17px 'JetBrains Mono'"; x.fillStyle = dark ? "#ffffff" : faded ? "#9aa3b5" : "#141a26"; x.fillText(label, tx, H/2 + 1, 400);
+  }, W, H);
+  const h = n.type === "hub" ? .04 : .032;     // pill height ≈ 2.5% of the viewport
+  group.userData.pill = sprite(tex, h * W/H, h);
+  return group;
+}
+
+function initGraph(){
+  graph = ForceGraph3D({controlType:"orbit"})(document.getElementById("graph"))
+    .backgroundColor("rgba(0,0,0,0)").showNavInfo(false)
+    .nodeId("id").nodeVal(n => n.type === "item" ? (n.cited ? 2 : 1) : 4)
+    .nodeColor(n => n.type === "item" ? (dimmed(n) ? "#d5dbe6" : n.cited ? "#2f6bff" : "#2a3142") : "#fff")
+    .nodeOpacity(.9).nodeResolution(10).nodeRelSize(.75)
+    .nodeThreeObject(n => n.type === "item" ? null : makeObject(n))
+    .nodeLabel(n => n.type === "item" ? `<b>${esc(n.title)}</b><br><span style="color:#8fa0c8">${esc(SRC[n.src] || "")} · ${esc(KIND[n.kind] || n.kind || "item")}${n.cited ? " · cited in brief" : ""}</span>`
+                     : n.type === "decision" ? esc(n.full) : n.type === "source" && n.status === "skipped" ? `${esc(n.label)} · nothing found` : "")
+    .linkColor(l => dimmed(l.source) && dimmed(l.target) ? "rgba(20,26,38,.05)" : l.type === "evidence" ? (focusSet ? "rgba(47,107,255,.75)" : "rgba(47,107,255,.14)") : ACTIVE(l.state) ? "rgba(47,107,255,.75)" : l.type === "item" ? "rgba(20,26,38,.35)" : l.type === "decision" ? "rgba(47,107,255,.45)" : "rgba(20,26,38,.7)")
+    .linkWidth(l => l.type === "hub" ? .6 : l.type === "evidence" ? .3 : l.type === "source" ? .35 : 0)
+    .linkCurvature(l => l.type === "evidence" ? .25 : 0).linkOpacity(.85)
+    .linkDirectionalParticles(l => ACTIVE(l.state) ? (l.type === "hub" ? 5 : 3) : 0)
+    .linkDirectionalParticleWidth(l => l.type === "hub" ? 2.6 : 2).linkDirectionalParticleSpeed(l => l.type === "hub" ? .018 : .025)
+    .linkDirectionalParticleColor(() => "#2f6bff")
+    .onNodeClick(n => select(n)).onBackgroundClick(() => select(null))
+    .onNodeHover(n => { document.getElementById("graph").style.cursor = n ? "pointer" : "grab"; });
+  graph.d3Force("charge", null); graph.d3Force("link", null); graph.d3Force("center", null);
+  graph.cooldownTime(Infinity).cooldownTicks(Infinity).d3AlphaMin(0).d3AlphaDecay(0).d3VelocityDecay(1);  // keep ticking so slots animate
+  const scene = graph.scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+  // background constellation: a sphere of points, each wired to its nearest neighbours
+  const N = 900, P = []; for (let i = 0; i < N; i++){ const r = 120 * Math.cbrt(Math.random()), t = Math.random()*Math.PI*2, p = Math.acos(2*Math.random()-1);
+    P.push([r*Math.sin(p)*Math.cos(t), r*Math.sin(p)*Math.sin(t)*.9, r*Math.cos(p)]); }
+  const seg = []; P.forEach((a, i) => { P.map((b, j) => [j, (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2]).sort((u, v) => u[1] - v[1]).slice(1, 4)
+    .forEach(([j]) => { if (j > i) seg.push(...a, ...P[j]); }); });
+  const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.Float32BufferAttribute(seg, 3));
+  scene.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({color:0x141a26, transparent:true, opacity:.1, depthWrite:false})));
+  const pg = new THREE.BufferGeometry(); pg.setAttribute("position", new THREE.Float32BufferAttribute(P.flat(), 3));
+  scene.add(new THREE.Points(pg, new THREE.PointsMaterial({color:0x141a26, size:1.1, transparent:true, opacity:.45, sizeAttenuation:true, depthWrite:false})));
+  const ctl = graph.controls(); ctl.autoRotate = true; ctl.autoRotateSpeed = .55; ctl.enableDamping = true;
+  ctl.addEventListener("start", () => { ctl.autoRotate = false; idle = Date.now(); });
+  graph.cameraPosition({x:0, y:70, z:190}, {x:0, y:0, z:0});
+  // pulse the glow of active nodes; resume orbiting after 12s idle
+  (function tick(){ const t = performance.now()/1000;
+    G.nodes.forEach(n => { const o = n.__threeObj?.userData; if (o?.active && o.glow && !dimmed(n)){ const w = Math.sin(t*4 + (n.phase || 0));
+      o.glow.material.opacity = .3 + .2*w; o.glow.scale.setScalar(o.base*(1 + .18*w)); } });
+    const cam = graph.camera().position, cd = cam.length();
+    G.nodes.forEach(n => { const p = n.__threeObj?.userData?.pill; if (p && !dimmed(n)){ const d = cam.distanceTo(n.__threeObj.position);
+      p.material.opacity = Math.max(.28, Math.min(1, 1.25 - (d - cd + 60) / 140)); } });
+    G.nodes.forEach(n => { if (n.tx === undefined) return; n.fx += (n.tx - n.fx)*.07; n.fy += (n.ty - n.fy)*.07; n.fz += (n.tz - n.fz)*.07; });
+    moveFloats();
+    if (!graph.controls().autoRotate && idle && Date.now() - idle > 12000 && !selected) graph.controls().autoRotate = true;
+    requestAnimationFrame(tick); })();
+  addEventListener("resize", resize); resize();
+}
+function resize(){ if (!graph) return; const el = document.getElementById("v-context"); graph.width(el.clientWidth).height(el.clientHeight); }
+
+function ensureNode(def, parentId){
+  let n = G.byId.get(def.id);
+  if (!n){
+    const p = parentId && G.byId.get(parentId), j = () => (Math.random() - .5) * 8;
+    const px = p?.fx ?? 0, py = p?.fy ?? 0, pz = p?.fz ?? 0;
+    n = {...def, phase:Math.random()*6, x:px, y:py, z:pz, fx:px, fy:py, fz:pz};  // spawn at the parent → glides out to its slot
+    G.nodes.push(n); G.byId.set(n.id, n); G.changed = true;
+  }
+  const sig = [def.label, def.status, def.count, def.sub].join("|");
+  if (n.__sig !== sig){ Object.assign(n, def); n.__sig = sig; G.restyle = true; }
+  return n;
+}
+function ensureLink(s, t, type, state){
+  const key = s + ">" + t; let l = G.links.find(x => x.key === key);
+  if (!l){ l = {key, source:s, target:t, type}; G.links.push(l); G.changed = true; }
+  if (l.state !== state){ l.state = state; G.restyle = true; }
+  return l;
+}
+function syncGraph(){
+  if (!graph) return;
+  $("#empty").style.display = S.actors.size ? "none" : "grid";
+  if (!S.actors.size) return;
+  const brief = RUN?.status === "done" && RUN.brief;
+  const ws = [...S.actors.values()].filter(a => a.id !== "master"), wdone = ws.filter(a => ["complete","failed","timed_out"].includes(a.status)).length;
+  const phase = brief ? "ready · click to read" : S.stage === "merging" ? "merging briefs" : ws.some(a => a.status === "summarizing") ? `summarizing · ${wdone}/${ws.length} done` : `gathering · ${wdone}/${ws.length}`;
+  ensureNode({id:"center", type:"center", label:"Team brief", sub:phase, status: brief ? "done" : S.stage === "merging" ? "merging" : "gathering"});
+  const fresh = [];
+  for (const a of S.actors.values()){
+    const hubId = "hub:" + a.id, st = a.id === "master" ? (brief ? "done" : a.status) : a.status;
+    ensureNode({id:hubId, type:"hub", actor:a.id, label:name(a.id), sub:st, status:st}, "center");
+    ensureLink(hubId, "center", "hub", S.stage === "merging" ? "merging" : a.id === "master" ? st : st === "complete" ? "ok" : st);
+    for (const src of a.sources){
+      const s = S.sources.get(a.id + "/" + src), sid = `src:${a.id}/${src}`;
+      ensureNode({id:sid, type:"source", actor:a.id, src, label:SRC[src] || src, count: s.state === "ok" ? s.items : null, sub: s.state === "ok" ? "" : s.state, status:s.state}, hubId);
+      ensureLink(sid, hubId, "source", s.state);
+      (s.titles || []).forEach(it => {
+        const iid = `item:${a.id}:${it.id}`, isNew = !G.byId.has(iid);
+        ensureNode({id:iid, type:"item", actor:a.id, src, itemId:it.id, title:it.title, url:it.url, kind:it.kind}, sid);
+        const l = ensureLink(iid, sid, "item", "ok"); if (isNew) fresh.push(l);
+      });
+    }
+  }
+  if (brief) linkBrief(brief);
+  place();
+  if (G.changed){ G.changed = false; G.restyle = false; graph.graphData({nodes:G.nodes, links:G.links}); }
+  else if (G.restyle){ G.restyle = false; refresh(); }
+  fresh.forEach((l, i) => setTimeout(() => { try { graph.emitParticle(l); } catch {} }, 200 + i*60));   // data flowing in
+  fresh.slice(0, 4).forEach((l, i) => setTimeout(() => floatLabel(G.byId.get(l.source.id ?? l.source)), 350 + i*450));
+}
+// Radial 3D layout: brief at the center, people on a tilted ring, their apps fanned outward, items as a small cloud.
+function place(){
+  const snap = RUN?.status === "done" && !G.live;  // opening a finished run: no glide
+  const set = (n, x, y, z) => { if (n){ n.tx = x; n.ty = y; n.tz = z; if (snap || n.placed === undefined && snap){ n.fx = x; n.fy = y; n.fz = z; } n.placed = true; } };
+  set(G.byId.get("center"), 0, 0, 0);
+  const actors = [...S.actors.values()].sort((a, b) => (a.id === "master") - (b.id === "master")), R = 62;
+  actors.forEach((a, i) => {
+    const ang = i * 2*Math.PI / actors.length, dx = Math.cos(ang), dz = Math.sin(ang), hy = (i % 2 ? 1 : -1) * 10;
+    const hx = dx*R, hz = dz*R; set(G.byId.get("hub:" + a.id), hx, hy, hz);
+    const m = a.sources.length;
+    a.sources.forEach((src, j) => {
+      const off = m > 1 ? (-0.7 + 1.4*j/(m-1)) : 0, ca = ang + off, r2 = 34, sy = hy + (j - (m-1)/2) * 9;
+      const sx = hx + Math.cos(ca)*r2, sz = hz + Math.sin(ca)*r2; set(G.byId.get(`src:${a.id}/${src}`), sx, sy, sz);
+      const items = G.nodes.filter(n => n.type === "item" && n.actor === a.id && n.src === src), k = items.length;
+      items.forEach((it, q) => {   // fibonacci sphere around the app, nudged outward
+        const yv = 1 - 2*(q + .5)/k, rr = Math.sqrt(1 - yv*yv), th = q * 2.39996, rad = 5 + 1.6*Math.sqrt(k);
+        set(it, sx + Math.cos(ca)*5 + rr*Math.cos(th)*rad, sy + yv*rad*.8, sz + Math.sin(ca)*5 + rr*Math.sin(th)*rad);
+      });
+    });
+  });
+  const decs = G.nodes.filter(n => n.type === "decision");
+  decs.forEach((d, i) => { const a = i * 2*Math.PI / decs.length + .4; set(d, Math.cos(a)*30, 44 + i*5, Math.sin(a)*30); });
+}
+
+const FLOATS = [];
+function floatLabel(n){
+  if (!n || !G.live) return;
+  const el = document.createElement("div"); el.className = "fl";
+  const t = n.title.length > 42 ? n.title.slice(0, 41) + "…" : n.title;
+  el.innerHTML = `<span class="ic">${svgIcon(n.src, 11)}</span><span class="k">${esc((SRC[n.src] || "").toUpperCase())}</span><span>${esc(t)}</span>`;
+  $("#floats").appendChild(el); const f = {el, n, born:performance.now()}; FLOATS.push(f);
+  setTimeout(() => { el.style.opacity = 0; setTimeout(() => { el.remove(); FLOATS.splice(FLOATS.indexOf(f), 1); }, 700); }, 3200);
+}
+function moveFloats(){ FLOATS.forEach(f => { const p = graph.graph2ScreenCoords(f.n.x, f.n.y, f.n.z); f.el.style.left = p.x + "px"; f.el.style.top = p.y + "px"; }); }
+
+function refresh(){ graph.nodeThreeObject(graph.nodeThreeObject()).linkColor(graph.linkColor()).nodeColor(graph.nodeColor()).linkDirectionalParticles(graph.linkDirectionalParticles()); }
+
+// After the brief: cited items light up, and each decision links to the items behind it.
+function evidenceNode(ev){ const [label, ...rest] = ev.split(":"), id = rest.join(":"), act = label === "shared" ? "master" : label;
+  return G.byId.get(`item:${act}:${id}`) || G.nodes.find(n => n.type === "item" && n.itemId === id); }
+function linkBrief(b){
+  if (briefLinked) return; briefLinked = true;
+  const all = JSON.stringify(b); G.nodes.forEach(n => { if (n.type === "item" && all.includes(":" + n.itemId + '"')) n.cited = true; });
+  (b.meeting_goals || []).forEach((g, i) => {
+    const id = "dec:" + i, short = g.text.replace(/^(decide|pick|choose|agree)\s+(on\s+|whether\s+|who\s+|if\s+)?/i, m => /who/i.test(m) ? "who " : "").replace(/^./, c => c.toUpperCase());
+    ensureNode({id, type:"decision", label: short.length > 30 ? short.slice(0, 29) + "…" : short, full:g.text, evidence:g.evidence, sub:"decide", status:"done"}, "center");
+    ensureLink(id, "center", "decision", "ok");
+    (g.evidence || []).forEach(ev => { const n = evidenceNode(ev); if (n) ensureLink(id, n.id, "evidence", "ok"); });
+  });
+  G.changed = true;
+}
+
+/* ---------- selection + details ---------- */
+function neighbors(n){ const s = new Set([n.id]); G.links.forEach(l => { const a = l.source.id ?? l.source, b = l.target.id ?? l.target;
+  if (a === n.id) s.add(b); if (b === n.id) s.add(a); });
+  if (n.type === "hub") G.nodes.forEach(m => m.actor === n.actor && s.add(m.id));
+  return s; }
+const dimmed = n => !!focusSet && !focusSet.has(n.id ?? n);
+function select(n){
+  selected = n || null; focusSet = n && n.type !== "center" ? neighbors(n) : null;
+  G.nodes.forEach(m => { const o = m.__threeObj; if (!o) return; o.traverse(c => { if (c.material && c !== o.userData?.glow) c.material.opacity = dimmed(m) ? .12 : 1; });
+    if (o.userData?.glow) o.userData.glow.material.opacity = dimmed(m) ? .03 : o.userData.glowOpacity; });
+  graph.nodeColor(graph.nodeColor()).linkColor(graph.linkColor());
+  document.querySelectorAll(".term").forEach(t => t.classList.toggle("sel", !!n && t.dataset.id === n.actor));
+  if (!n){ closeDrawer(); return; }
+  graph.controls().autoRotate = false; idle = Date.now();
+  const d = n.type === "center" ? 190 : n.type === "item" ? 40 : 70, r = Math.hypot(n.x, n.y, n.z) || 1;
+  const pos = n.type === "center" ? {x:0, y:70, z:190} : {x:n.x*(1 + d/r), y:n.y*(1 + d/r), z:n.z*(1 + d/r)};
+  graph.cameraPosition(pos, n, 1100);
+  openDrawer(n);
+}
+function personBrief(actorId){
+  const b = RUN?.brief; if (!b?.people || actorId === "master") return null; const nm = name(actorId).toLowerCase();
+  return b.people.find(p => p.name.toLowerCase() === nm || p.name.toLowerCase().slice(0, 4) === actorId.slice(0, 4).toLowerCase());
+}
+function citedIn(n){ const b = RUN?.brief; if (!b) return []; const out = [], needle = ":" + n.itemId;
+  (b.people || []).forEach(p => ["progress","wip","next"].forEach(k => (p[k] || []).forEach(i => (i.evidence || []).some(e => e.endsWith(needle)) && out.push([p.name + " · " + k, i.text]))));
+  (b.meeting_goals || []).forEach(g => (g.evidence || []).some(e => e.endsWith(needle)) && out.push(["decide", g.text]));
+  return out; }
+const BUCKETS = [["progress","Progress so far","#1f9d63"],["wip","Work in progress","#2f6bff"],["next","Next steps","#141a26"]];
+function openDrawer(n){
+  let h = `<span class="x" onclick="select(null)">✕</span>`;
+  if (n.type === "center"){
+    const b = RUN?.brief;
+    h += `<div class="caps">Team brief</div><h3>${b ? esc(b.team_goal || b.headline) : "Collecting context…"}</h3>`;
+    h += `<div class="sub">${[...S.actors.values()].filter(a => a.id !== "master").length} laptops · ${G.nodes.filter(x => x.type === "item").length} items gathered</div>`;
+    if (b?.meeting_goals?.length) h += `<div class="sec"><div class="caps">Decide in this meeting</div>${b.meeting_goals.map((g, i) => `<div class="row link" onclick="select(G.byId.get('dec:${i}'))"><span class="ic">${svgIcon("decision", 14)}</span><span>${esc(g.text)}</span></div>`).join("")}</div>`;
+    if (b) h += `<div class="sec"><button class="btn" onclick="show('brief')">Open full brief →</button></div>`;
+  } else if (n.type === "hub"){
+    const a = S.actors.get(n.actor), pb = personBrief(n.actor);
+    h += `<div class="caps">${n.actor === "master" ? "Master · shared sources" : "Laptop · worker " + esc(n.actor)}</div><h3>${esc(name(n.actor))}</h3><div class="sub">status: ${esc(a.status)}</div>`;
+    if (pb) h += BUCKETS.map(([k, label, c]) => (pb[k] || []).length ? `<div class="sec"><div class="caps" style="color:${c}">${label}</div>${pb[k].map(i => `<div class="row"><span>${esc(i.text)}</span></div>`).join("")}</div>` : "").join("");
+    h += `<div class="sec"><div class="caps">Sources</div>${a.sources.map(s => { const x = S.sources.get(n.actor + "/" + s);
+      return `<div class="row link" onclick="select(G.byId.get('src:${n.actor}/${s}'))"><span class="ic">${svgIcon(s, 14)}</span><span>${SRC[s] || s}</span><span class="tag" style="margin-left:auto">${x.state === "ok" ? x.items + " items" : esc(x.state)}</span></div>`; }).join("")}</div>`;
+  } else if (n.type === "source"){
+    const s = S.sources.get(n.actor + "/" + n.src);
+    h += `<div class="caps">${esc(name(n.actor))} · source</div><h3 style="display:flex;gap:10px;align-items:center">${svgIcon(n.src, 20)}${esc(n.label)}</h3>
+      <div class="sub">${s.state === "ok" ? `${s.items} items found` : esc(s.reason || s.state)}</div>`;
+    h += (s.titles || []).map(it => { const node = G.byId.get(`item:${n.actor}:${it.id}`);
+      return `<div class="row link" onclick="select(G.byId.get('item:${n.actor}:${esc(it.id)}'))"><span class="ic">${svgIcon("item", 12, node?.cited ? "#7fa8ff" : "#c9d0dc")}</span><span>${esc(it.title)}</span>${node?.cited ? `<span class="tag cited" style="margin-left:auto">cited</span>` : ""}</div>`; }).join("");
+  } else if (n.type === "item"){
+    const cites = citedIn(n);
+    h += `<div class="caps">${esc(SRC[n.src] || n.src)} · ${esc(KIND[n.kind] || n.kind || "item")} · ${esc(name(n.actor))}</div><h3>${esc(n.title)}</h3>`;
+    if (n.url) h += `<div class="sub"><a href="${esc(n.url)}" target="_blank">Open source ↗</a></div>`;
+    h += `<div class="sec"><div class="caps">${cites.length ? "Used in the brief" : RUN?.brief ? "Not cited in the brief" : "Brief not ready yet"}</div>${cites.map(([w, t]) => `<div class="row"><span class="tag cited">${esc(w)}</span><span>${esc(t)}</span></div>`).join("")}</div>`;
+  } else if (n.type === "decision"){
+    h += `<div class="caps">Decide in this meeting</div><h3>${esc(n.full)}</h3><div class="sec"><div class="caps">Based on</div>${(n.evidence || []).map(ev => { const m = evidenceNode(ev);
+      return m ? `<div class="row link" onclick="select(G.byId.get('${m.id}'))"><span class="ic">${svgIcon(m.src, 14)}</span><span>${esc(m.title)}</span></div>` : `<div class="row"><span class="tag">${esc(ev)}</span></div>`; }).join("") || `<div class="row">No linked sources.</div>`}</div>`;
+  }
+  $("#drawer").innerHTML = h; $("#drawer").classList.add("on");
+}
+function closeDrawer(){ $("#drawer").classList.remove("on"); }
+
+/* ---------- side + progress ---------- */
+function renderSide(){
+  const side = $("#side"), ids = [...S.actors.keys()].sort((a, b) => (a === "master") - (b === "master"));
+  ids.forEach(id => {
+    let el = side.querySelector(`.term[data-id="${id}"]`);
+    if (!el){ el = document.createElement("div"); el.className = "term"; el.dataset.id = id; el.onclick = () => select(G.byId.get("hub:" + id));
+      el.innerHTML = `<div class="hd"><span class="av">${id === "master" ? "⌂" : initials(name(id))}</span><b></b><span class="role"></span><span class="st"></span></div><div class="body"></div>`; side.appendChild(el); }
+    const a = S.actors.get(id), st = id === "master" ? (RUN?.status === "done" ? "done" : S.stage === "merging" ? "merging" : "gathering") : a.status;
+    el.querySelector("b").textContent = name(id); el.querySelector(".role").textContent = id === "master" ? "master" : "laptop";
+    const s = el.querySelector(".st"); s.className = "st " + st; s.textContent = (st || "").replace("_", " ");
+    const body = el.querySelector(".body"), lines = S.lines.get(id) || [];
+    for (let i = body.children.length; i < lines.length; i++){ const d = document.createElement("div"); d.className = "ln new"; d.innerHTML = lines[i]; body.appendChild(d); }
+  });
+}
+function renderProgress(){
+  if (!S.actors.size){ $("#progress").innerHTML = ""; return; }
+  const workers = [...S.actors.values()].filter(a => a.id !== "master"), done = workers.filter(a => ["complete","failed","timed_out"].includes(a.status)).length;
+  const reached = RUN?.status === "done" ? 4 : S.stage === "merging" ? 3 : workers.some(a => ["summarizing","complete"].includes(a.status)) ? 2 : 1;
+  $("#progress").innerHTML = ["Gather", "Summarize", "Merge", "Brief"].map((label, i) =>
+    `<span class="step ${i < reached - 1 || RUN?.status === "done" ? "done" : ""} ${i === reached - 1 && RUN?.status !== "done" ? "on" : ""}">${label}${label === "Gather" ? ` ${done}/${workers.length}` : ""}</span>`).join('<span class="sep"></span>');
+}
+
+/* ======================= brief ======================= */
+function chip(ids, index){ const id = (ids || [])[0]; if (!id) return "";
+  const meta = index[id] || {}, key = id.split(":").pop(), label = key.replace(/^GH-/, "").replace("ISSUE-", "#").replace("PR-", "PR #");
+  return `<a class="chip" ${meta.url ? `href="${esc(meta.url)}" target="_blank"` : ""} data-tip="${esc(meta.title || key)}">${esc(label)}</a>`; }
+function renderBrief(run){
+  const b = run.brief || {}, idx = run.index || {};
+  if (!b.people){ $("#brief").innerHTML = `<div class="note">This brief has no per-person view.</div>`; return; }
+  const actorFor = p => [...S.actors.keys()].find(a => personBrief(a) === p);
+  const people = b.people.map(p => { const a = actorFor(p);
+    return `<div class="person"><div class="who"><span class="av">${initials(p.name)}</span><b>${esc(p.name)}</b>${a ? `<button class="btn ghost" onclick="show('context');setTimeout(()=>select(G.byId.get('hub:${a}')),50)">in graph</button>` : ""}</div>
+    ${BUCKETS.map(([k, label, c]) => (p[k] || []).length ? `<div class="bucket" style="--c:${c}"><div class="caps">${label}</div><ul>${p[k].map(i => `<li><span>${esc(i.text)}</span>${chip(i.evidence, idx)}</li>`).join("")}</ul></div>` : "").join("") || `<div class="note">Nothing reported.</div>`}</div>`; }).join("");
+  const decide = (b.meeting_goals || []).map(g => `<label><input type="checkbox"><span>${esc(g.text)}</span>${chip(g.evidence, idx)}</label>`).join("");
+  const sec = (title, arr, f) => arr && arr.length ? `<div class="sec"><h3>${title}</h3><ul>${arr.map(f).join("")}</ul></div>` : "";
+  $("#brief").innerHTML = `<div class="wrap">
+    <div class="goal"><div class="caps">Team goal</div><p>${esc(b.team_goal || b.headline || "")}</p></div>
+    <div class="people">${people}</div>
+    ${decide ? `<div class="decide"><h3>Decide in this meeting</h3>${decide}</div>` : ""}
+    <details class="full"><summary>Full brief · commitments, gaps, actions</summary>
+      ${sec("Commitments", b.commitments, c => `<li><span class="badge ${esc(c.status)}">${esc((c.status || "").replace("_", " "))}</span> <b>${esc(c.owner || "")}</b> ${esc(c.what)} ${chip(c.evidence, idx)}</li>`)}
+      ${sec("Gaps", b.gaps, g => `<li>${esc(g.description)} <span style="color:var(--mute)">${esc(g.why_it_matters || "")}</span> ${chip(g.evidence, idx)}</li>`)}
+      ${sec("Action items", b.action_items, a => `<li><span class="badge ${esc(a.priority)}">${esc(a.priority || "")}</span> ${esc(a.what)} <b>${esc(a.owner || "")}</b> ${chip(a.evidence, idx)}</li>`)}
+      ${sec("Dependencies & conflicts", b.dependencies_and_conflicts, d => `<li>${esc(d.description)} ${chip(d.evidence, idx)}</li>`)}
+    </details></div>`;
+  document.querySelectorAll(".decide input").forEach(i => i.onchange = () => i.parentElement.classList.toggle("done", i.checked));
+}
+function tip(ev, html){ const t = $("#tip"); t.innerHTML = html; t.style.display = "block"; t.style.left = ev.clientX + 14 + "px"; t.style.top = ev.clientY + 14 + "px"; }
+document.addEventListener("mouseover", ev => { const c = ev.target.closest(".chip"); if (c) tip(ev, esc(c.dataset.tip)); });
+document.addEventListener("mouseout", ev => { if (ev.target.closest(".chip")) $("#tip").style.display = "none"; });
+
+/* ======================= tasks ======================= */
+const COLS = [["todo","To do","#9aa3b5"],["in_progress","In progress","#2f6bff"],["blocked","Blocked","#d9473b"],["done","Done","#1f9d63"]];
+let TASKS = [], who = "all", TMETA = null;
+async function loadTasks(){ const j = await (await fetch("/api/tasks")).json(); TASKS = j.tasks; TMETA = j; renderTasks(); }
+function renderTasks(){
+  const owners = [...new Set(TASKS.map(t => t.owner || "unassigned"))], list = TASKS.filter(t => who === "all" || (t.owner || "unassigned") === who);
+  $("#tasks").innerHTML = `<div class="wrap" style="max-width:1400px">
+    <div class="filters">${["all", ...owners].map(o => `<button class="${o === who ? "on" : ""}" data-o="${esc(o)}">${esc(o === "all" ? "Everyone" : o === "unassigned" ? "Unassigned" : name(o))}</button>`).join("")}</div>
+    ${TASKS.length ? "" : `<div class="note">No tasks yet. They appear once the After stage processes a meeting${TMETA && !TMETA.after_db_found ? ` (no After database at ${esc(TMETA.after_db)})` : ""}.</div>`}
+    <div class="board">${COLS.map(([k, label, c]) => { const col = list.filter(t => (t.status || "todo") === k);
+      return `<div class="col" data-s="${k}"><h4><span class="caps" style="--c:${c}">${label}</span><span class="n">${col.length}</span></h4>${col.map(card).join("")}</div>`; }).join("")}</div></div>`;
+  document.querySelectorAll(".filters button").forEach(b => b.onclick = () => { who = b.dataset.o; renderTasks(); });
+  document.querySelectorAll(".task[draggable=true]").forEach(c => c.ondragstart = ev => ev.dataTransfer.setData("text", c.dataset.id));
+  document.querySelectorAll(".col").forEach(col => {
+    col.ondragover = ev => { ev.preventDefault(); col.classList.add("over"); }; col.ondragleave = () => col.classList.remove("over");
+    col.ondrop = async ev => { ev.preventDefault(); col.classList.remove("over"); const id = ev.dataTransfer.getData("text"), t = TASKS.find(x => String(x.id) === id); if (!t) return;
+      t.status = col.dataset.s; renderTasks(); await fetch(`/api/tasks/${id}`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({status:t.status})}); };
+  });
+}
+function card(t){
+  const own = t.owner ? `<span class="av" title="${esc(name(t.owner))}">${initials(name(t.owner))}</span>` : `<span class="flag">unassigned</span>`;
+  const flags = (t.flags || []).filter(f => f && f !== "unassigned").map(f => `<span class="flag">${esc(f.replace("_", " "))}</span>`).join("");
+  return `<div class="task ${t.origin === "after" ? "" : "ro"}" draggable="${t.origin === "after"}" data-id="${esc(t.id)}" title="${esc(t.quote || "")}">
+    <div class="t">${esc(t.title)}</div><div class="meta">${own}${t.due ? `<span class="badge">due ${esc(t.due)}</span>` : ""}${flags}
+    ${t.url ? `<a class="chip" href="${esc(t.url)}" target="_blank">issue ↗</a>` : ""}<span class="org">${t.origin === "after" ? esc(t.channel || "after") : "brief"}</span></div></div>`;
+}
+
+/* ======================= boot ======================= */
+(async () => {
+  await document.fonts.ready; await loadIcons(); initGraph();
+  CFG = await (await fetch("/api/config")).json();
+  if (CFG.demo) $("#go").innerHTML = "▶ Generate prep <span style='opacity:.65'>· demo</span>";
+  const r = await fetch("/api/runs/latest");
+  if (r.ok){ const run = await r.json(); attach(run.id); } else syncGraph();
+})();
+</script>
+</body>
+</html>

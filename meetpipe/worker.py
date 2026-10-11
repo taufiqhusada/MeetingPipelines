@@ -26,11 +26,22 @@ def worker_sources(value: str | None = None) -> list[str]:
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 
-def _run_job(job: dict, path: str, llm_name: str, sources: list[str] | tuple = CODING_SOURCES) -> dict:
+def _event_sender(base_url: str, token: str, job_id: str):
+    """Best-effort live progress to the coordinator; never blocks or fails the job."""
+    def send(event: dict) -> None:
+        try:
+            request_json(base_url, token, "POST", f"/v1/worker/jobs/{quote(job_id)}/events", event, timeout=10)
+        except Exception:
+            pass
+    return send
+
+
+def _run_job(job: dict, path: str, llm_name: str, sources: list[str] | tuple = CODING_SOURCES,
+             on_event=None) -> dict:
     scope = make_scope(path=path, since=job["since"], repo=job.get("repo"), meeting=job.get("meeting"))
     # Session logs, mail and docs stay on this device. Only the local model's compact
     # brief and its citation index are uploaded to the coordinator.
-    result = prepare(scope, sources=list(sources), llm_name=llm_name,
+    result = prepare(scope, sources=list(sources), llm_name=llm_name, on_event=on_event,
                      log=lambda line: print(line, flush=True))
     return {"brief": result.brief, "index": result.index, "status": result.status}
 
@@ -58,7 +69,8 @@ def serve(path: str, llm_name: str | None = None, poll_wait: int = 285, sources:
                 continue
             print(f"Received meeting prep job {job['id']}", flush=True)
             try:
-                result = _run_job(job, path, llm_name, sources)
+                result = _run_job(job, path, llm_name, sources,
+                                  on_event=_event_sender(base_url, token, job["id"]))
             except Exception as e:
                 result = {"error": f"{type(e).__name__}: {e}"}
             try:

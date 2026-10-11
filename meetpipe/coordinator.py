@@ -58,6 +58,11 @@ def _init_db() -> None:
             PRIMARY KEY(job_id, worker_id), FOREIGN KEY(job_id) REFERENCES jobs(id)
         );
         CREATE INDEX IF NOT EXISTS worker_jobs_queue ON worker_jobs(worker_id, status, updated);
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, worker_id TEXT NOT NULL,
+            ts REAL NOT NULL, payload_json TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS events_job ON events(job_id, id);
         """)
 
 
@@ -157,6 +162,25 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(201, {"id": job_id, "deadline": now + timeout,
                                     "workers": list(workers)})
 
+        match = re.fullmatch(r"/v1/worker/jobs/([a-f0-9]{32})/events", path)
+        if match:  # live progress for the dashboard: source/stage updates, item titles + links only
+            worker_id = self._worker()
+            if not worker_id:
+                return self._send(401, {"error": "unauthorized"})
+            try:
+                body = self._body()
+                if len(json.dumps(body)) > 64_000:
+                    raise ValueError("event too large")
+            except (ValueError, TypeError, json.JSONDecodeError) as e:
+                return self._send(400, {"error": str(e)})
+            with _connect() as db:
+                if not db.execute("SELECT 1 FROM worker_jobs WHERE job_id=? AND worker_id=?",
+                                  (match.group(1), worker_id)).fetchone():
+                    return self._send(404, {"error": "job not assigned to this worker"})
+                db.execute("INSERT INTO events (job_id, worker_id, ts, payload_json) VALUES (?,?,?,?)",
+                           (match.group(1), worker_id, time.time(), json.dumps(body, ensure_ascii=False)))
+            return self._send(200, {"ok": True})
+
         match = re.fullmatch(r"/v1/worker/jobs/([a-f0-9]{32})/result", path)
         if match:
             worker_id = self._worker()
@@ -225,6 +249,20 @@ class Handler(BaseHTTPRequestHandler):
                         return self._send(200, {"job": None})
                     _changed.wait(timeout=remaining)
 
+        match = re.fullmatch(r"/v1/jobs/([a-f0-9]{32})/events", path.path)
+        if match:
+            if not self._admin():
+                return self._send(401, {"error": "unauthorized"})
+            try:
+                after = int(parse_qs(path.query).get("after", ["0"])[0])
+            except ValueError:
+                return self._send(400, {"error": "after must be an integer"})
+            with _connect() as db:
+                rows = db.execute("SELECT id, worker_id, ts, payload_json FROM events WHERE job_id=? AND id>? "
+                                  "ORDER BY id LIMIT 500", (match.group(1), after)).fetchall()
+            return self._send(200, {"events": [{"id": r["id"], "actor": r["worker_id"], "ts": r["ts"],
+                                                **json.loads(r["payload_json"])} for r in rows]})
+
         match = re.fullmatch(r"/v1/jobs/([a-f0-9]{32})", path.path)
         if match:
             if not self._admin():
@@ -257,3 +295,8 @@ def create_job(base_url: str, token: str, payload: dict) -> dict:
 def get_job(base_url: str, token: str, job_id: str) -> dict:
     from .coordinator_client import request_json
     return request_json(base_url, token, "GET", f"/v1/jobs/{job_id}")
+
+
+def get_events(base_url: str, token: str, job_id: str, after: int = 0) -> list[dict]:
+    from .coordinator_client import request_json
+    return request_json(base_url, token, "GET", f"/v1/jobs/{job_id}/events?after={after}")["events"]

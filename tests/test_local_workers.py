@@ -10,7 +10,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 from meetpipe import coordinator, slack_bot, worker
 from meetpipe.config import settings
@@ -211,7 +211,7 @@ class WorkerLoopTests(unittest.TestCase):
             {"job": None}, {"job": job}, {"ok": True}, KeyboardInterrupt(),
         ]) as http, patch("meetpipe.worker._run_job", return_value={"brief": sample_brief()}) as retrieve:
             worker.serve("/fixture/checkout", "codex", poll_wait=10)
-        retrieve.assert_called_once_with(job, "/fixture/checkout", "codex", worker.worker_sources())
+        retrieve.assert_called_once_with(job, "/fixture/checkout", "codex", worker.worker_sources(), on_event=ANY)
         self.assertEqual([call.args[2] for call in http.call_args_list], ["GET", "GET", "POST", "GET"])
 
     def test_retrieval_error_is_reported_and_worker_resumes_waiting(self):
