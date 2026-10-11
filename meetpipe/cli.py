@@ -1,29 +1,20 @@
-"""CLI: doctor | connect | setup-github | run | aggregate."""
+"""CLI: doctor | connect | setup-github | run | slack-bot | aggregate."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 from . import brief as brief_mod
 from .config import settings
 from .llm import LLM
 from .models import RunScope
-from .pipeline import SOURCES, gather, new_run_dir, write_run
-
-
-def parse_since(value: str) -> datetime:
-    if m := re.fullmatch(r"(\d+)([dwh])", value):
-        n, unit = int(m.group(1)), m.group(2)
-        delta = {"d": timedelta(days=n), "w": timedelta(weeks=n), "h": timedelta(hours=n)}[unit]
-        return datetime.now(timezone.utc) - delta
-    dt = datetime.fromisoformat(value)
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+from .pipeline import SOURCES
+from .runner import make_scope, parse_since, prepare
 
 
 def _line(ok: bool | None, name: str, detail: str) -> None:
@@ -100,43 +91,24 @@ def cmd_connect(args) -> int:
 
 
 def cmd_run(args) -> int:
-    from .connectors.github import detect_repo
+    scope = make_scope(args.path, args.since, args.repo, args.meeting,
+                       [k.strip() for k in (args.keywords or "").split(",") if k.strip()])
+    sources = [s.strip() for s in args.sources.split(",")] if args.sources else None
+    result = prepare(scope, sources, None if args.no_llm else args.llm)
+    if result.markdown is None:
+        print(f"\nDone (no summary). See {result.run_dir}" if result.index else "No context gathered.")
+        return 0 if result.index else 1
+    print(f"\n{result.markdown}\n\n✔ Wrote {result.run_dir}/brief.md and brief.json")
+    if args.post:
+        from .slack_bot import post_brief
+        post_brief(args.post, result)
+        print(f"✔ Posted to Slack {args.post}")
+    return 0
 
-    path = os.path.abspath(args.path)
-    scope = RunScope(since=parse_since(args.since), path=path, repo=args.repo or detect_repo(path),
-                     meeting=args.meeting, keywords=[k.strip() for k in (args.keywords or "").split(",") if k.strip()])
-    sources = [s.strip() for s in args.sources.split(",")] if args.sources else SOURCES
-    llm = None if args.no_llm else LLM(args.llm)
-    run_dir = new_run_dir()
-    print(f"▶ Run {run_dir.name}  path={scope.path}  repo={scope.repo}  since={scope.since:%Y-%m-%d}"
-          f"  llm={args.llm if llm else 'none'}")
 
-    print("① Gathering …")
-    results, status = gather(scope, sources, llm=llm)
-    for src in sources:
-        st = status.get(src, {})
-        detail = (f"{st.get('items')} items in {st.get('seconds')}s" if st.get("status") == "ok"
-                  else st.get("reason", ""))
-        print(f"   {src:<12} {st.get('status', '-'):<8} {detail[:200]}")
-
-    print("② Trimming + redacting …")
-    context_path, index = write_run(run_dir, scope, results, status)
-    print(f"   context.md: {context_path.stat().st_size:,} bytes, {len(index)} items")
-
-    if llm is None:
-        print(f"\nDone (no summary). See {run_dir}")
-        return 0
-    if not index:
-        print("No context gathered; skipping summary.")
-        return 1
-
-    print(f"③ Summarizing with {args.llm} …")
-    result = brief_mod.summarize(context_path.read_text(), llm)
-    (run_dir / "brief.json").write_text(json.dumps(result, indent=2, ensure_ascii=False))
-    title = f"Pre-meeting brief: {scope.meeting or scope.repo or Path(scope.path).name}"
-    md = brief_mod.to_markdown(result, index, title)
-    (run_dir / "brief.md").write_text(md)
-    print(f"\n{md}\n\n✔ Wrote {run_dir}/brief.md and brief.json")
+def cmd_slack_bot(args) -> int:
+    from .slack_bot import serve
+    serve(path=args.path, llm_name=args.llm)
     return 0
 
 
@@ -192,7 +164,13 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--sources", help=f"comma list, default all: {','.join(SOURCES)}")
     r.add_argument("--llm", default=settings.llm, choices=["claude", "codex"])
     r.add_argument("--no-llm", action="store_true", help="gather only (keyword Drive triage, no summary)")
+    r.add_argument("--post", metavar="CHANNEL", help="also post the brief to a Slack channel, e.g. '#team'")
     r.set_defaults(fn=cmd_run)
+
+    sb = sub.add_parser("slack-bot", help="listen for '@agent generate meeting prep' and reply with a brief")
+    sb.add_argument("--path", default=".", help="local repo the bot prepares briefs for")
+    sb.add_argument("--llm", default=settings.llm, choices=["claude", "codex"])
+    sb.set_defaults(fn=cmd_slack_bot)
 
     g = sub.add_parser("aggregate", help="merge several briefs into one team brief")
     g.add_argument("briefs", nargs="+", help="run dirs or brief.json paths, optionally label=path")

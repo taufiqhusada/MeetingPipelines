@@ -44,6 +44,16 @@ Output lands in `runs/<timestamp>/`: `brief.md` (readable), `brief.json` (for Sl
 | `--llm` | `$LLM` / `claude` | `claude` or `codex` |
 | `--no-llm` | – | gather only (keyword-based Drive triage, no summary) |
 
+### From Slack
+
+```bash
+uv run run.py slack-bot            # keep running; needs SLACK_BOT_TOKEN + SLACK_APP_TOKEN in .env
+```
+Then in a channel the bot is in: `@agent generate meeting prep` (options: `since 7d`, `for "Weekly sync"`,
+or `@agent help`). The pipeline runs on the bot host's laptop and the brief is posted in the thread
+(+ `brief.md` attached). Only one bot process per Slack app should be running. From the terminal instead:
+`uv run run.py run --post "#channel"`.
+
 ### Merge several briefs (team view)
 
 ```bash
