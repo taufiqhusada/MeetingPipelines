@@ -648,7 +648,13 @@ function card(t){
   CFG = await (await fetch("/api/config")).json();
   if (CFG.demo) $("#go").innerHTML = "▶ Generate prep <span style='opacity:.65'>· demo</span>";
   const r = await fetch("/api/runs/latest");
-  if (r.ok){ const run = await r.json(); attach(run.id); } else syncGraph();
+  if (r.ok){ const run = await r.json(); G.live = run.status === "running"; attach(run.id); } else syncGraph();
+  // Pick up runs started elsewhere (Slack @agent, another browser) and animate them live.
+  setInterval(async () => {
+    const x = await fetch("/api/runs/latest?after=999999"); if (!x.ok) return;
+    const run = await x.json();
+    if (run.id !== RUN?.id && run.status === "running"){ resetAll(); G.live = true; attach(run.id); show("context"); }
+  }, 2500);
 })();
 </script>
 </body>
