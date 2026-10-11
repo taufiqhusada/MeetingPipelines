@@ -45,7 +45,8 @@ class RunResult:
 
 
 def prepare(scope: RunScope, sources: list[str] | None = None, llm_name: str | None = "claude",
-            log: Callable[[str], None] = print) -> RunResult:
+            log: Callable[[str], None] = print, on_event: Callable[[dict], None] | None = None) -> RunResult:
+    emit = on_event or (lambda _e: None)
     sources = sources or SOURCES
     llm = LLM(llm_name) if llm_name else None
     run_dir = new_run_dir()
@@ -53,7 +54,8 @@ def prepare(scope: RunScope, sources: list[str] | None = None, llm_name: str | N
         f"  llm={llm_name or 'none'}")
 
     log("① Gathering …")
-    results, status = gather(scope, sources, llm=llm)
+    emit({"kind": "stage", "stage": "gathering"})
+    results, status = gather(scope, sources, llm=llm, on_event=emit)
     for src in sources:
         st = status.get(src, {})
         detail = (f"{st.get('items')} items in {st.get('seconds')}s" if st.get("status") == "ok"
@@ -66,11 +68,14 @@ def prepare(scope: RunScope, sources: list[str] | None = None, llm_name: str | N
     result = RunResult(run_dir=run_dir, status=status, index=index,
                        title=f"Pre-meeting brief: {scope.meeting or scope.repo or Path(scope.path).name}")
     if llm is None or not index:
+        emit({"kind": "stage", "stage": "done", "items": len(index)})
         return result
 
     log(f"③ Summarizing with {llm_name} …")
+    emit({"kind": "stage", "stage": "summarizing", "items": len(index)})
     result.brief = brief_mod.summarize(context_path.read_text(), llm)
     (run_dir / "brief.json").write_text(json.dumps(result.brief, indent=2, ensure_ascii=False))
     result.markdown = brief_mod.to_markdown(result.brief, index, result.title)
     (run_dir / "brief.md").write_text(result.markdown)
+    emit({"kind": "stage", "stage": "done", "items": len(index)})
     return result

@@ -6,7 +6,7 @@ import json
 import re
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -32,7 +32,18 @@ def _timed(name, fn):
                           "trace": traceback.format_exc(limit=3)}
 
 
-def gather(scope: RunScope, sources: list[str], llm=None) -> tuple[dict[str, list[ContextItem]], dict]:
+def source_event(name: str, items: list[ContextItem], st: dict) -> dict:
+    """Progress event for the dashboard: counts plus item titles/links only (never bodies)."""
+    return {"kind": "source", "source": name, "state": st.get("status"), "items": len(items),
+            "seconds": st.get("seconds"), "reason": (st.get("reason") or "")[:200],
+            "titles": [{"id": i.id, "title": redact(i.title)[:140], "url": i.url, "kind": i.kind}
+                       for i in items[:25]]}
+
+
+def gather(scope: RunScope, sources: list[str], llm=None, on_event=None) -> tuple[dict[str, list[ContextItem]], dict]:
+    emit = on_event or (lambda _e: None)
+    for name in sources:
+        emit({"kind": "source", "source": name, "state": "fetching"})
     fetchers = {
         "claude_code": lambda: claude_code.fetch(scope),
         "codex": lambda: codex.fetch(scope),
@@ -44,12 +55,16 @@ def gather(scope: RunScope, sources: list[str], llm=None) -> tuple[dict[str, lis
     }
     results, status = {}, {}
     with ThreadPoolExecutor(max_workers=len(fetchers)) as pool:
-        for name, items, st in pool.map(lambda kv: _timed(*kv), [(n, f) for n, f in fetchers.items() if n in sources]):
+        futures = [pool.submit(_timed, n, f) for n, f in fetchers.items() if n in sources]
+        for fut in as_completed(futures):  # report each source the moment it finishes
+            name, items, st = fut.result()
             results[name], status[name] = items, st
+            emit(source_event(name, items, st))
     if "drive" in sources:  # after gmail, so docs already pulled via email links aren't fetched twice
         seen = {d for it in results.get("gmail", []) for d in it.meta.get("drive_ids", [])}
         name, items, st = _timed("drive", lambda: drive.fetch(scope, llm=llm, skip_ids=seen))
         results[name], status[name] = items, st
+        emit(source_event(name, items, st))
     for items in results.values():
         for it in items:
             it.body, it.title = redact(it.body), redact(it.title)

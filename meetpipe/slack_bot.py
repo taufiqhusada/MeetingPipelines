@@ -132,7 +132,8 @@ def parse_command(text: str) -> dict | None:
 
 # ---------------------------- bot ----------------------------
 
-def _collect_team_brief(scope, options: dict, llm_name: str = "claude") -> RunResult:
+def _collect_team_brief(scope, options: dict, llm_name: str = "claude", on_event=None) -> RunResult:
+    emit = on_event or (lambda _e: None)
     coordinator_url = os.getenv("MEETPIPE_COORDINATOR_URL", "")
     coordinator_token = os.getenv("MEETPIPE_COORDINATOR_ADMIN_TOKEN", "")
     timeout_seconds = int(os.getenv("MEETPIPE_JOB_TIMEOUT_SECONDS", "300"))
@@ -141,13 +142,15 @@ def _collect_team_brief(scope, options: dict, llm_name: str = "claude") -> RunRe
         "timeout_seconds": timeout_seconds,
     })
     print(f"Queued local context job {job['id']} for {len(job['workers'])} workers", flush=True)
+    emit({"kind": "job", "job_id": job["id"], "workers": job["workers"], "deadline": job["deadline"]})
 
     # Gather common sources on the bot host while teammates retrieve their
     # private agent history locally in parallel.
     shared_sources = [s.strip() for s in os.getenv("MEETPIPE_SHARED_SOURCES", "github,gmail,drive,local").split(",")
                       if s.strip()]
     shared = prepare(scope, sources=shared_sources, llm_name=llm_name,
-                     log=lambda line: print(line, flush=True))
+                     log=lambda line: print(line, flush=True), on_event=lambda e: emit({**e, "actor": "master"}))
+    emit({"kind": "stage", "stage": "waiting_workers", "actor": "master"})
     deadline = float(job["deadline"])
     view = {"workers": []}
     while time.time() < deadline:
@@ -193,6 +196,7 @@ def _collect_team_brief(scope, options: dict, llm_name: str = "claude") -> RunRe
         shared.status = source_status
         return shared
     # Always merge (even a single brief) so the per-person view exists.
+    emit({"kind": "stage", "stage": "merging", "actor": "master", "briefs": list(briefs)})
     final_brief = brief_mod.aggregate(briefs, LLM(llm_name))
     final_index = index
 

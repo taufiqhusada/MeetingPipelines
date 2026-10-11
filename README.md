@@ -54,6 +54,17 @@ or `@agent help`). The pipeline runs on the bot host's laptop and the brief is p
 (+ `brief.md` attached). Only one bot process per Slack app should be running. From the terminal instead:
 `uv run run.py run --post "#channel"`.
 
+### Live dashboard (master)
+
+```bash
+uv run run.py coordinator --host 0.0.0.0          # job queue for teammates' workers
+uv run run.py dashboard --host 0.0.0.0 --slack    # web UI + "@agent generate meeting prep" listener
+```
+Open `http://<master-ip>:8770`: a 3D context graph that grows live as each laptop reports (people → apps →
+items, with a phase ticker), the per-person brief, and a task tracker (After stage tasks, drag to change status).
+Slack mentions and the **Generate prep** button start the same run; Slack gets the brief plus a link to the graph.
+`--slack` replaces `slack-bot` (only one listener per Slack app). Try it without workers: `uv run run.py dashboard --demo`.
+
 ### Merge several briefs (team view)
 
 ```bash

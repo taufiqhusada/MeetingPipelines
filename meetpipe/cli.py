@@ -129,6 +129,12 @@ def cmd_coordinator(args) -> int:
     return 0
 
 
+def cmd_dashboard(args) -> int:
+    from .dashboard import serve
+    serve(host=args.host, port=args.port, demo=args.demo, path=args.path, llm=args.llm, slack=args.slack)
+    return 0
+
+
 def cmd_worker(args) -> int:
     from .worker import serve
     from .worker import worker_sources
@@ -227,6 +233,17 @@ def main(argv: list[str] | None = None) -> int:
     co.add_argument("--host", default=os.getenv("MEETPIPE_COORDINATOR_HOST", "127.0.0.1"))
     co.add_argument("--port", type=int, default=int(os.getenv("MEETPIPE_COORDINATOR_PORT", "8766")))
     co.set_defaults(fn=cmd_coordinator)
+
+    db = sub.add_parser("dashboard", help="live web UI: context graph, brief, task tracker (run on the master)")
+    db.add_argument("--host", default=os.getenv("MEETPIPE_DASHBOARD_HOST", "127.0.0.1"),
+                    help="0.0.0.0 to let teammates on the LAN open it")
+    db.add_argument("--port", type=int, default=int(os.getenv("MEETPIPE_DASHBOARD_PORT", "8770")))
+    db.add_argument("--demo", action="store_true", help="replay a scripted run from local data (no workers needed)")
+    db.add_argument("--slack", action="store_true",
+                    help="also answer '@agent generate meeting prep' (use instead of slack-bot; one listener only)")
+    db.add_argument("--path", default=".")
+    db.add_argument("--llm", default=settings.llm, choices=["claude", "codex"])
+    db.set_defaults(fn=cmd_dashboard)
 
     w = sub.add_parser("worker", help="long-poll for Slack-triggered local context jobs")
     w.add_argument("--path", default=os.getenv("MEETPIPE_WORKER_PATH", "."),
