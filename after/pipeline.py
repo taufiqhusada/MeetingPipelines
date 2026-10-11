@@ -3,7 +3,7 @@ import json
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
-from . import config, db, executors, report
+from . import config, db, executors, report, research
 from .analyze import analyze
 from .schemas import Transcript
 
@@ -126,14 +126,19 @@ def decide(task_id: int, approve: bool) -> dict:
         executors.slack_message(mid, "Meeting report attached (open in a browser).",
                                 files=[str(config.ROOT / url.lstrip("/"))])
     else:
-        # No built-in executor (e.g. purchases): hand the Darwin matches to the requester.
+        # Darwin found who *could* do it; without Darwin Act we run it locally (research only, never buys).
         darwin = json.loads(row["darwin_json"] or "{}")
-        options = "\n".join(f"• {a['name']} ({a['readiness']})" for a in darwin.get("agents", [])) or "• none found"
-        executors.slack_message(
-            mid, f"Approved: *{task['title']}*. Agents that can do this:\n{options}\nA human completes it.",
-            task.get("requested_by"),
-        )
-        result = {"ok": True, "detail": "Routed to a human with Darwin's agent matches (no auto-execution)."}
+        route = (darwin.get("agents") or [{}])[0].get("name")
+        try:
+            found = research.run(task)
+            result = {"ok": True, "via": "local research (Claude + web search)", "darwin_route": route, **found}
+            text = f"*{task['title']}*: here's what the meeting agent found.\n{found['summary']}"
+        except RuntimeError as e:
+            options = "\n".join(f"• {a['name']} ({a['readiness']})" for a in darwin.get("agents", [])) or "• none found"
+            result = {"ok": True, "darwin_route": route,
+                      "detail": f"Routed to a human with Darwin's agent matches (no auto-execution): {e}"}
+            text = f"Approved: *{task['title']}*. Agents that can do this:\n{options}\nA human completes it."
+        executors.slack_message(mid, text, task.get("requested_by"))
     db.execute("UPDATE agent_tasks SET approval='approved', result_json=? WHERE id=?", json.dumps(result), task_id)
     return get_meeting(mid)
 

@@ -140,7 +140,17 @@ def test_approve_report_builds_html(demo_meeting):
     assert any("report attached" in o["body"].lower() for o in m["outbox"])
 
 
-def test_other_task_is_routed_to_human_not_executed(demo_meeting):
+def test_other_task_runs_local_research(demo_meeting, monkeypatch):
+    from after import research
+    monkeypatch.setattr(research, "run", lambda task: {"summary": "3 options found", "sources": ["https://x"]})
+    task = next(t for t in demo_meeting["agent_tasks"] if t["kind"] == "other")
+    m = pipeline.decide(task["id"], approve=True)
+    result = next(t for t in m["agent_tasks"] if t["id"] == task["id"])["result"]
+    assert result["summary"] == "3 options found" and result["darwin_route"] == "agent for order snacks"
+    assert "3 options found" in m["outbox"][-1]["body"]
+
+
+def test_other_task_without_key_falls_back_to_human(demo_meeting):
     task = next(t for t in demo_meeting["agent_tasks"] if t["kind"] == "other")
     m = pipeline.decide(task["id"], approve=True)
     result = next(t for t in m["agent_tasks"] if t["id"] == task["id"])["result"]

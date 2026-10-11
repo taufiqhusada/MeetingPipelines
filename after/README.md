@@ -10,7 +10,9 @@ Takes a meeting transcript and turns it into work:
 5. **Agent tasks**: queued for **approval** in the UI, then executed:
    - `schedule_meeting` → Google Calendar event with a Meet link (or an `.ics` invite until Google is set up)
    - `meeting_report` → one-page visual HTML report, link posted to Slack
-   - `other` (purchases, etc.) → **Darwin Search** finds agents that could do it; a human completes it (we never act through Darwin)
+   - `other` (purchases, research, ...) → **Darwin Search** finds which agent could do it; we run it locally with
+     Claude + web search (`research.py`): options, prices, links. It never buys or books; a human does the final step.
+     Darwin Act (`Run via Darwin`) lights up only for startable agents with an allowlisted key.
 6. `next_meeting_goals` are saved, so the next meeting is compared against them.
 
 ```

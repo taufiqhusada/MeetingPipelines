@@ -9,3 +9,4 @@ __pycache__/
 after/data/
 after/output/
 .DS_Store
+src/*.egg-info/
