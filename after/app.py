@@ -87,10 +87,12 @@ def refresh_darwin(task_id: int):
 
 
 @app.post("/api/agent-tasks/{task_id}/{decision}")
-def decide(task_id: int, decision: str):
+def decide(task_id: int, decision: str, approver: str | None = None):
     if decision not in ("approve", "reject"):
         raise HTTPException(400, "decision must be approve or reject")
-    return _run(pipeline.decide, task_id, decision == "approve")
+    if approver is not None and approver not in {u["slack_user_id"] for u in db.team()}:
+        raise HTTPException(403, f"{approver or 'This Slack user'} isn't on the team list, so can't approve tasks")
+    return _run(pipeline.decide, task_id, decision == "approve", approver)
 
 
 # TranscripTonic (Chrome extension for Google Meet) posts here when a meeting ends.

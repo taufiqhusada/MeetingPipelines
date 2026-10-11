@@ -89,11 +89,15 @@ def process(transcript: Transcript) -> dict:
     # Agent tasks: wait for approval. Darwin search shows which external agent could take each one.
     with ThreadPoolExecutor() as pool:
         matches = list(pool.map(lambda t: executors.darwin_search(t["capability_query"]), a["agent_tasks"]))
+    queued = []
     for t, darwin in zip(a["agent_tasks"], matches):
-        db.execute(
+        task_id = db.execute(
             "INSERT INTO agent_tasks (meeting_id, title, kind, payload_json, darwin_json) VALUES (?,?,?,?,?)",
             mid, t["title"], t["kind"], json.dumps(t), json.dumps(darwin),
         )
+        queued.append({"id": task_id, "title": t["title"], "kind": t["kind"], "payload": t, "darwin": darwin})
+    if queued:
+        executors.slack_approval_request(mid, transcript.title, queued)
     # Saved last, so a meeting only appears (UI, webhook pollers) once all its tasks exist.
     db.execute(
         "INSERT OR REPLACE INTO meetings (id, title, date, source, transcript_json, analysis_json, goals_json) "
@@ -105,7 +109,7 @@ def process(transcript: Transcript) -> dict:
     return get_meeting(mid)
 
 
-def decide(task_id: int, approve: bool) -> dict:
+def decide(task_id: int, approve: bool, approver: str | None = None) -> dict:
     row = db.rows("SELECT * FROM agent_tasks WHERE id = ?", task_id)[0]
     if row["approval"] != "pending":
         return get_meeting(row["meeting_id"])
@@ -140,6 +144,8 @@ def decide(task_id: int, approve: bool) -> dict:
                       "detail": f"Routed to a human with Darwin's agent matches (no auto-execution): {e}"}
             text = f"Approved: *{task['title']}*. Agents that can do this:\n{options}\nA human completes it."
         executors.slack_message(mid, text, task.get("requested_by"))
+    if approver:
+        result["approved_by"] = approver
     db.execute("UPDATE agent_tasks SET approval='approved', result_json=? WHERE id=?", json.dumps(result), task_id)
     return get_meeting(mid)
 

@@ -348,3 +348,84 @@ def test_transcriptonic_you_becomes_self_name(monkeypatch):
     body = {**ADVANCED, "transcript": [{"personName": "You", "timestamp": "2026-10-11T21:00:05.000Z",
                                         "transcriptText": "I'll do it."}], "chatMessages": []}
     assert transcripts.from_transcriptonic(body).lines[0].speaker == "George Zhou"
+
+
+# ---------------------------------------------------------------- Slack approval buttons
+
+def test_agent_tasks_posted_with_buttons(demo_meeting):
+    rows = [o for o in demo_meeting["outbox"] if "[Approve | Reject]" in o["body"]]
+    assert len(rows) == 1 and rows[0]["target"] == config.SLACK_CHANNEL
+
+
+def test_approval_blocks_layout(demo_meeting):
+    from after import slack_actions
+    blocks = slack_actions.approval_blocks("Sync", demo_meeting["agent_tasks"], "http://x")
+    actions = [b for b in blocks if b["type"] == "actions"]
+    assert [b["block_id"] for b in actions] == [f"after_task_{t['id']}" for t in demo_meeting["agent_tasks"]]
+    assert {e["action_id"] for e in actions[0]["elements"]} == {slack_actions.APPROVE, slack_actions.REJECT}
+
+
+class FakeSlack:
+    def __init__(self):
+        self.updates, self.ephemeral = [], []
+
+    def chat_update(self, **kw):
+        self.updates.append(kw)
+
+    def chat_postEphemeral(self, **kw):
+        self.ephemeral.append(kw)
+
+
+def _click(meeting, kind):
+    from after import slack_actions
+    task = next(t for t in meeting["agent_tasks"] if t["kind"] == kind)
+    blocks = slack_actions.approval_blocks("Sync", meeting["agent_tasks"], "http://x")
+    body = {"actions": [{"value": str(task["id"])}], "user": {"id": "U1", "username": "georgezhou1010"},
+            "channel": {"id": "C1"}, "message": {"ts": "1.0", "blocks": blocks}}
+    return task, body
+
+
+def test_slack_click_approves_via_api(demo_meeting, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from after import app as app_module, slack_actions
+    api = TestClient(app_module.app)
+    monkeypatch.setattr(slack_actions.httpx, "post", lambda url, params, timeout: api.post(url.replace("http://after", ""), params=params))
+    task, body = _click(demo_meeting, "meeting_report")
+    slack = FakeSlack()
+    text = slack_actions.handle_click("approve", body, slack, api_url="http://after")
+    assert text == "✅ Approved by <@U1>: recap + visuals posted"
+    final = slack.updates[-1]["blocks"]
+    swapped = next(b for b in final if b.get("block_id") == f"after_task_{task['id']}")
+    assert swapped["type"] == "context" and "Approved by" in swapped["elements"][0]["text"]
+    assert sum(b["type"] == "actions" for b in final) == 2  # other tasks keep their buttons
+    row = next(t for t in pipeline.get_meeting(demo_meeting["id"])["agent_tasks"] if t["id"] == task["id"])
+    assert row["approval"] == "approved" and row["result"]["approved_by"] == "georgezhou1010"
+
+
+def test_slack_click_from_outsider_is_refused(demo_meeting, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from after import app as app_module, slack_actions
+    api = TestClient(app_module.app)
+    monkeypatch.setattr(slack_actions.httpx, "post", lambda url, params, timeout: api.post(url.replace("http://after", ""), params=params))
+    task, body = _click(demo_meeting, "other")
+    body["user"] = {"id": "U9", "username": "stranger"}
+    text = slack_actions.handle_click("approve", body, FakeSlack(), api_url="http://after")
+    assert text.startswith("⚠️") and "isn't on the team list" in text
+    assert next(t for t in pipeline.get_meeting(demo_meeting["id"])["agent_tasks"] if t["id"] == task["id"])["approval"] == "pending"
+
+
+def test_slack_click_when_after_is_down_restores_buttons(demo_meeting, monkeypatch):
+    from after import slack_actions
+
+    def boom(*a, **k):
+        raise httpx_error
+
+    import httpx as _httpx
+    httpx_error = _httpx.ConnectError("refused")
+    monkeypatch.setattr(slack_actions.httpx, "post", boom)
+    task, body = _click(demo_meeting, "other")
+    slack = FakeSlack()
+    assert slack_actions.handle_click("approve", body, slack, api_url="http://after") == "error"
+    assert slack.updates[-1]["blocks"] == body["message"]["blocks"] and slack.ephemeral
