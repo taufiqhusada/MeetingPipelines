@@ -7,6 +7,7 @@ token.json
 __pycache__/
 *.pyc
 after/data/
+/data/
 after/output/
 .DS_Store
 src/*.egg-info/

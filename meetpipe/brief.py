@@ -55,6 +55,10 @@ def _cite(ids: list[str], index: dict[str, dict]) -> str:
 
 def to_markdown(brief: dict, index: dict[str, dict], title: str) -> str:
     md = [f"# {title}", "", brief.get("headline", ""), ""]
+    if brief.get("meeting_goals"):
+        md.append("## 🗳 Decisions for this meeting")
+        md += [f"- {g['text']}{_cite(g.get('evidence'), index)}" for g in brief["meeting_goals"]]
+        md.append("")
     if brief.get("progress"):
         md.append("## ✅ Progress so far")
         md += [f"- {p['summary']}{_cite(p.get('evidence'), index)}" for p in brief["progress"]]
@@ -87,12 +91,10 @@ def to_markdown(brief: dict, index: dict[str, dict], title: str) -> str:
         md.append("## ❓ Open questions")
         md += [f"- {q['question']}{_cite(q.get('evidence'), index)}" for q in brief["open_questions"]]
         md.append("")
-    if brief.get("coverage_notes"):
-        md += ["---", f"_Coverage: {brief['coverage_notes']}_"]
     return "\n".join(md)
 
 
-PEOPLE_BUCKETS = [("progress", "✅ Progress so far"), ("wip", "🔄 WIP"), ("next", "➡️ Next steps")]
+PEOPLE_BUCKETS = [("progress", "✅ Done"), ("wip", "🔄 In progress"), ("next", "➡️ Next")]
 
 
 def _ref(ids: list[str], index: dict[str, dict]) -> str:
@@ -101,28 +103,34 @@ def _ref(ids: list[str], index: dict[str, dict]) -> str:
         key = i.split(":", 1)[-1]
         url = (index.get(i) or index.get(key) or {}).get("url")
         label = key.removeprefix("GH-").replace("ISSUE-", "#").replace("PR-", "PR #")
-        return f" ([{label}]({url}))" if url else ""
+        if url:
+            return f" ([{label}]({url}))"
     return ""
 
 
 def to_people_markdown(brief: dict, index: dict[str, dict], title: str) -> str:
-    """Team goal → each person (progress / WIP / next) → what this meeting must decide."""
+    """Short Slack preview: goal, decisions, then compact attributable updates."""
     md = [f"# 📋 {title}", ""]
     if brief.get("team_goal"):
         md += [f"🎯 **Team goal:** {brief['team_goal']}", ""]
-    for person in brief.get("people", []):
-        md.append(f"## 👤 {person['name']}")
-        any_items = False
-        for key, label in PEOPLE_BUCKETS:
-            items = person.get(key, [])[:3]
-            if items:
-                any_items = True
-                md.append(f"**{label}**")
-                md += [f"• {it['text']}{_ref(it.get('evidence'), index)}" for it in items]
-        if not any_items:
-            md.append("_nothing reported_")
+    elif brief.get("headline"):
+        md += [brief["headline"], ""]
+    goals = brief.get("meeting_goals") or [
+        {"text": q["question"], "evidence": q.get("evidence", [])}
+        for q in brief.get("open_questions", [])
+    ]
+    if goals:
+        md.append("## 🗳 Decisions for this meeting")
+        md += [f"• {g['text']}{_ref(g.get('evidence'), index)}" for g in goals[:3]]
         md.append("")
-    if brief.get("meeting_goals"):
-        md.append("## 🗳 Goal for this meeting")
-        md += [f"• {g['text']}{_ref(g.get('evidence'), index)}" for g in brief["meeting_goals"][:4]]
+    for person in brief.get("people", []):
+        updates = []
+        for key, label in PEOPLE_BUCKETS:
+            items = person.get(key, [])[:1]
+            if items:
+                it = items[0]
+                updates.append(f"• {label}: {it['text']}{_ref(it.get('evidence'), index)}")
+        if updates:
+            md += [f"**{person['name']}**", *updates, ""]
+    md.append("_Details and evidence in the attached brief.md._")
     return "\n".join(md).strip()
