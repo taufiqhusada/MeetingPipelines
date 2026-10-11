@@ -193,12 +193,14 @@ class CoordinatorTests(unittest.TestCase):
         self.assertIn('"alice:CX-123456"', "\n".join(prompts))
         self.assertEqual(set(captured_briefs[0]), {"alice", "bob", "shared"})
         self.assertEqual(result.status["workers"]["items"], 2)
-        self.assertIn("alice:CX-123456", result.markdown)
+        self.assertIn("alice:CX-123456", (result.run_dir / "brief.md").read_text())
+        self.assertNotIn("Coverage:", (result.run_dir / "brief.md").read_text())
         client = Mock()
         slack_bot.post_brief("C123456", result, thread_ts="fixture-thread", client=client)
         self.assertTrue(client.chat_postMessage.called)
         self.assertEqual(client.files_upload_v2.call_args.kwargs["thread_ts"], "fixture-thread")
         self.assertTrue(Path(client.files_upload_v2.call_args.kwargs["file"]).exists())
+        self.assertNotIn("Sources:", client.files_upload_v2.call_args.kwargs["initial_comment"])
 
 
 class WorkerLoopTests(unittest.TestCase):

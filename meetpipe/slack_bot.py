@@ -103,13 +103,15 @@ def post_brief(channel: str, result: RunResult, thread_ts: str | None = None, cl
     """Post the brief as mrkdwn (split into readable chunks) and attach brief.md."""
     client = client or _client()
     channel_id = channel if re.match(r"^[CGD][A-Z0-9]+$", channel) else resolve_channel(channel)
-    parts = chunks(to_mrkdwn(result.markdown or ""))
+    preview = (brief_mod.to_people_markdown(result.brief, result.index, result.title)
+               if result.brief is not None else result.markdown or "")
+    parts = chunks(to_mrkdwn(preview))
     for i, part in enumerate(parts):
         client.chat_postMessage(channel=channel_id, text=part, thread_ts=thread_ts, unfurl_links=False,
                                 unfurl_media=False, reply_broadcast=bool(thread_ts and i == 0))
     client.files_upload_v2(channel=channel_id, thread_ts=thread_ts, title=f"{result.run_dir.name}-brief.md",
                            file=str(result.run_dir / "brief.md"),
-                           initial_comment=f"Sources: {source_summary(result.status)}")
+                           initial_comment="Detailed meeting brief with supporting evidence.")
 
 
 # ---------------------------- command parsing ----------------------------
@@ -191,6 +193,11 @@ def _collect_team_brief(scope, options: dict, llm_name: str | None = None) -> Ru
                   f"{len(completed)} returned context"
                   + (f" ({', '.join(completed)})" if completed else ""),
     }
+    print(f"Sources: {source_summary(source_status)}", flush=True)
+    for row in worker_rows:
+        if row["status"] != "complete" or not (row.get("result") or {}).get("brief"):
+            print(f"Worker {row['worker_id']}: {row['status']}"
+                  + (" (no matching context)" if row["status"] == "complete" else ""), flush=True)
     if not briefs:
         shared.status = source_status
         return shared
@@ -199,15 +206,10 @@ def _collect_team_brief(scope, options: dict, llm_name: str | None = None) -> Ru
     final_index = index
 
     title = f"Team pre-meeting brief: {scope.meeting or scope.repo or 'project sync'}"
-    missing = [f"{r['worker_id']} ({r['status']})" for r in worker_rows if r['status'] != "complete"]
-    missing += [f"{r['worker_id']} (no matching context)" for r in worker_rows
-                if r['status'] == "complete" and not (r.get("result") or {}).get("brief")]
-    coverage = ("\n\n_No result from " + ", ".join(missing) + "._") if missing else ""
     # Slack gets the short per-person view; the detailed brief is attached as brief.md.
-    slack_md = (brief_mod.to_people_markdown(final_brief, final_index, title)
-                if final_brief.get("people") else brief_mod.to_markdown(final_brief, final_index, title)) + coverage
+    slack_md = brief_mod.to_people_markdown(final_brief, final_index, title)
     (shared.run_dir / "brief.json").write_text(json.dumps(final_brief, indent=2, ensure_ascii=False))
-    (shared.run_dir / "brief.md").write_text(brief_mod.to_markdown(final_brief, final_index, title) + coverage)
+    (shared.run_dir / "brief.md").write_text(brief_mod.to_markdown(final_brief, final_index, title))
     (shared.run_dir / "brief_people.md").write_text(slack_md)
     return RunResult(run_dir=shared.run_dir, status=source_status, index=final_index,
                      brief=final_brief, markdown=slack_md, title=title)
@@ -241,10 +243,10 @@ def serve(path: str = ".", llm_name: str | None = None) -> None:
             result = _collect_team_brief(scope, opts, llm_name)
             if not result.markdown:
                 client.chat_update(channel=channel, ts=status_msg["ts"],
-                                   text=f"Couldn't build a brief: no context found. {source_summary(result.status)}")
+                                   text="Couldn't build a brief: no context found. Check the master app logs for details.")
                 return
             client.chat_update(channel=channel, ts=status_msg["ts"],
-                               text=f"✅ Brief ready for <@{user}>. Sources: {source_summary(result.status)}")
+                               text=f"✅ Brief ready for <@{user}>.")
             post_brief(channel, result, thread_ts=thread_ts, client=client)
         except Exception as e:
             traceback.print_exc()
