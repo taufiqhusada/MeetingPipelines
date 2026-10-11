@@ -1,5 +1,7 @@
 # Charlotte
 
+<p align="center"><img src="meetpipe/web/assets/charlotte-wordmark.png" alt="Charlotte" width="480"></p>
+
 ## Connects your work.
 
 **We’re building Charlotte: a meeting intelligence system that turns the work already happening across your team into shared context, clear decisions, and accountable next steps.**

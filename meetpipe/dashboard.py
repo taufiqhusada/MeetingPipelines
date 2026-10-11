@@ -438,6 +438,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, (WEB / "dashboard.html").read_bytes(), "text/html; charset=utf-8")
         if url.path == "/assets/charlotte-logo.png":
             return self._send(200, (WEB / "assets" / "charlotte-logo.png").read_bytes(), "image/png")
+        if url.path == "/assets/charlotte-wordmark.png":
+            return self._send(200, (WEB / "assets" / "charlotte-wordmark.png").read_bytes(), "image/png")
         if url.path == "/api/config":
             people = {}
             for pair in os.getenv("MEETPIPE_PEOPLE", "").split(","):
