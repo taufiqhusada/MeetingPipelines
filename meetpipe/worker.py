@@ -7,6 +7,7 @@ import random
 import time
 from urllib.parse import quote
 
+from .config import settings
 from .coordinator_client import request_json, validate_url
 from .runner import make_scope, prepare
 
@@ -24,7 +25,8 @@ def _run_job(job: dict, path: str, llm_name: str) -> dict:
     return {"brief": result.brief, "index": result.index, "status": result.status}
 
 
-def serve(path: str, llm_name: str = "claude", poll_wait: int = 285) -> None:
+def serve(path: str, llm_name: str | None = None, poll_wait: int = 285) -> None:
+    llm_name = llm_name or settings.llm
     base_url = os.getenv("MEETPIPE_COORDINATOR_URL", "").rstrip("/")
     token = os.getenv("MEETPIPE_WORKER_TOKEN", "")
     worker_id = os.getenv("MEETPIPE_WORKER_ID", "")

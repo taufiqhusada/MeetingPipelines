@@ -20,6 +20,7 @@ import time
 import traceback
 
 from . import brief as brief_mod
+from .config import settings
 from .coordinator import create_job, get_job
 from .llm import LLM
 from .runner import RunResult, make_scope, prepare
@@ -132,7 +133,8 @@ def parse_command(text: str) -> dict | None:
 
 # ---------------------------- bot ----------------------------
 
-def _collect_team_brief(scope, options: dict, llm_name: str = "claude") -> RunResult:
+def _collect_team_brief(scope, options: dict, llm_name: str | None = None) -> RunResult:
+    llm_name = llm_name or settings.llm
     coordinator_url = os.getenv("MEETPIPE_COORDINATOR_URL", "")
     coordinator_token = os.getenv("MEETPIPE_COORDINATOR_ADMIN_TOKEN", "")
     timeout_seconds = int(os.getenv("MEETPIPE_JOB_TIMEOUT_SECONDS", "300"))
@@ -206,11 +208,14 @@ def _collect_team_brief(scope, options: dict, llm_name: str = "claude") -> RunRe
                      brief=final_brief, markdown=slack_md, title=title)
 
 
-def serve(path: str = ".", llm_name: str = "claude") -> None:
+def serve(path: str = ".", llm_name: str | None = None) -> None:
     from slack_bolt import App
     from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+    llm_name = llm_name or settings.llm
     app = App(token=os.environ["SLACK_BOT_TOKEN"])
+    from after.slack_actions import register as register_after_actions
+    register_after_actions(app)
     busy = threading.Lock()
     host = socket.gethostname().split(".")[0]
     coordinator_url = os.getenv("MEETPIPE_COORDINATOR_URL", "")

@@ -42,7 +42,7 @@ class Settings:
     codex_sessions_dir: Path = field(default_factory=lambda: _path("CODEX_SESSIONS_DIR", "~/.codex/sessions"))
     claude_bin: str | None = field(default_factory=lambda: os.getenv("CLAUDE_BIN") or None)
     codex_bin: str | None = field(default_factory=lambda: os.getenv("CODEX_BIN") or None)
-    llm: str = field(default_factory=lambda: os.getenv("LLM", "claude"))
+    llm: str = field(default_factory=lambda: os.getenv("LLM", "codex"))
     transcript_senders: list[str] = field(default_factory=lambda: _list(
         "TRANSCRIPT_SENDERS",
         "meet-recordings-noreply@google.com,gemini-notes@google.com,no-reply@zoom.us,"

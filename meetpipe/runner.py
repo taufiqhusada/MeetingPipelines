@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import brief as brief_mod
+from .config import settings
 from .connectors.github import detect_repo
 from .llm import LLM
 from .models import RunScope
@@ -44,7 +45,7 @@ class RunResult:
     meta: dict = field(default_factory=dict)
 
 
-def prepare(scope: RunScope, sources: list[str] | None = None, llm_name: str | None = "claude",
+def prepare(scope: RunScope, sources: list[str] | None = None, llm_name: str | None = settings.llm,
             log: Callable[[str], None] = print) -> RunResult:
     sources = sources or SOURCES
     llm = LLM(llm_name) if llm_name else None

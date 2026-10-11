@@ -1,5 +1,5 @@
 """FastAPI server for the After stage.  Run: uvicorn after.app:app --reload"""
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -40,7 +40,8 @@ def index():
 @app.get("/api/status")
 def status():
     return {"flags": config.flags(), "model": config.CLAUDE_MODEL, "dry_run": config.DRY_RUN,
-            "meetings": db.rows("SELECT id, title, date, source FROM meetings ORDER BY date DESC")}
+            "meetings": db.rows("SELECT id, title, date, source, created_at FROM meetings "
+                                "WHERE analysis_json IS NOT NULL ORDER BY created_at DESC LIMIT 15")}
 
 
 @app.get("/api/samples")
@@ -70,13 +71,7 @@ def meeting(meeting_id: str):
     return _run(pipeline.get_meeting, meeting_id)
 
 
-@app.post("/api/agent-tasks/{task_id}/{decision}")
-def decide(task_id: int, decision: str):
-    if decision not in ("approve", "reject"):
-        raise HTTPException(400, "decision must be approve or reject")
-    return _run(pipeline.decide, task_id, decision == "approve")
-
-
+# Darwin routes must come before /{decision}, which would otherwise swallow "darwin".
 class DarwinRunIn(BaseModel):
     agent_id: str
 
@@ -89,6 +84,32 @@ def run_via_darwin(task_id: int, body: DarwinRunIn):
 @app.post("/api/agent-tasks/{task_id}/darwin/refresh")
 def refresh_darwin(task_id: int):
     return _run(pipeline.refresh_darwin, task_id)
+
+
+@app.post("/api/agent-tasks/{task_id}/{decision}")
+def decide(task_id: int, decision: str, approver: str | None = None):
+    if decision not in ("approve", "reject"):
+        raise HTTPException(400, "decision must be approve or reject")
+    if approver is not None and approver not in {u["slack_user_id"] for u in db.team()}:
+        raise HTTPException(403, f"{approver or 'This Slack user'} isn't on the team list, so can't approve tasks")
+    return _run(pipeline.decide, task_id, decision == "approve", approver)
+
+
+# TranscripTonic (Chrome extension for Google Meet) posts here when a meeting ends.
+# Extension settings -> "Set up webhooks": URL http://localhost:8000/api/webhooks/transcriptonic, body type "Advanced".
+@app.post("/api/webhooks/transcriptonic", status_code=202)
+def transcriptonic_webhook(body: dict, background: BackgroundTasks):
+    transcript = _run(transcripts.from_transcriptonic, body)
+    background.add_task(_process_quietly, transcript)  # analysis takes ~40s; answer the extension right away
+    return {"accepted": True, "meeting_id": transcript.meeting_id, "lines": len(transcript.lines),
+            "view": f"{config.BASE_URL}/?meeting={transcript.meeting_id}"}
+
+
+def _process_quietly(transcript):
+    try:
+        pipeline.process(transcript)
+    except Exception as e:  # nobody is waiting on this request; log for the server console
+        print(f"[transcriptonic] processing {transcript.meeting_id} failed: {e}", flush=True)
 
 
 # Recall.ai: send a bot to a live meeting, then process its transcript once the call ends.
