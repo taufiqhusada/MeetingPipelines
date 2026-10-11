@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from .llm import LLM
@@ -17,6 +18,16 @@ def summarize(context_md: str, llm: LLM) -> dict:
     return llm.json(prompt)
 
 
+def people_hint(labels: list[str]) -> str:
+    """Display names for the per-person view: MEETPIPE_PEOPLE="taufik=Taufiq,gz1010=George,…" plus worker ids."""
+    names = {l: l.capitalize() for l in labels if l != "shared"}
+    for pair in os.getenv("MEETPIPE_PEOPLE", "").split(","):
+        alias, _, name = pair.partition("=")
+        if alias.strip() and name.strip():
+            names[alias.strip()] = name.strip()
+    return ", ".join(f"{a} → {n}" for a, n in names.items()) or "use the names found in the briefs"
+
+
 def aggregate(briefs: dict[str, dict], llm: LLM) -> dict:
     labelled = {}
     for label, brief in briefs.items():
@@ -28,7 +39,8 @@ def aggregate(briefs: dict[str, dict], llm: LLM) -> dict:
                 if entry.get("made_in"):
                     entry["made_in"] = f"{label}:{entry['made_in']}"
         labelled[label] = b
-    prompt = (PROMPTS / "aggregate.md").read_text().replace("{briefs}", json.dumps(labelled, indent=2))
+    prompt = ((PROMPTS / "aggregate.md").read_text().replace("{people}", people_hint(list(briefs)))
+              .replace("{briefs}", json.dumps(labelled, indent=2)))
     return llm.json(prompt)
 
 
@@ -78,3 +90,39 @@ def to_markdown(brief: dict, index: dict[str, dict], title: str) -> str:
     if brief.get("coverage_notes"):
         md += ["---", f"_Coverage: {brief['coverage_notes']}_"]
     return "\n".join(md)
+
+
+PEOPLE_BUCKETS = [("progress", "✅ Progress so far"), ("wip", "🔄 WIP"), ("next", "➡️ Next steps")]
+
+
+def _ref(ids: list[str], index: dict[str, dict]) -> str:
+    """One short source link per line, e.g. (PR #12), so lines stay readable."""
+    for i in ids or []:
+        key = i.split(":", 1)[-1]
+        url = (index.get(i) or index.get(key) or {}).get("url")
+        label = key.removeprefix("GH-").replace("ISSUE-", "#").replace("PR-", "PR #")
+        return f" ([{label}]({url}))" if url else ""
+    return ""
+
+
+def to_people_markdown(brief: dict, index: dict[str, dict], title: str) -> str:
+    """Team goal → each person (progress / WIP / next) → what this meeting must decide."""
+    md = [f"# 📋 {title}", ""]
+    if brief.get("team_goal"):
+        md += [f"🎯 **Team goal:** {brief['team_goal']}", ""]
+    for person in brief.get("people", []):
+        md.append(f"## 👤 {person['name']}")
+        any_items = False
+        for key, label in PEOPLE_BUCKETS:
+            items = person.get(key, [])[:3]
+            if items:
+                any_items = True
+                md.append(f"**{label}**")
+                md += [f"• {it['text']}{_ref(it.get('evidence'), index)}" for it in items]
+        if not any_items:
+            md.append("_nothing reported_")
+        md.append("")
+    if brief.get("meeting_goals"):
+        md.append("## 🗳 Goal for this meeting")
+        md += [f"• {g['text']}{_ref(g.get('evidence'), index)}" for g in brief["meeting_goals"][:4]]
+    return "\n".join(md).strip()

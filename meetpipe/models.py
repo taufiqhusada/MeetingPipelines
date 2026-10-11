@@ -6,6 +6,10 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
 
+class SourceNotConfigured(RuntimeError):
+    """Raised by a connector whose credentials aren't set up; the run marks it skipped, not failed."""
+
+
 @dataclass
 class ContextItem:
     id: str  # short citable id, e.g. "GH-PR-92", "CC-3f2a1b"

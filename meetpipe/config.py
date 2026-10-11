@@ -31,6 +31,8 @@ class Settings:
     github_client_id: str | None = field(default_factory=lambda: os.getenv("GITHUB_CLIENT_ID") or None)
     github_client_secret: str | None = field(default_factory=lambda: os.getenv("GITHUB_CLIENT_SECRET") or None)
     github_app_slug: str | None = field(default_factory=lambda: os.getenv("GITHUB_APP_SLUG") or None)
+    after_db_path: Path = field(default_factory=lambda: _path("AFTER_DB_PATH", "after/data/after.db"))
+    fireflies_api_key: str | None = field(default_factory=lambda: os.getenv("FIREFLIES_API_KEY") or None)
     # Optional overrides: a personal access token / a downloaded OAuth client JSON
     github_token: str | None = field(default_factory=lambda: os.getenv("GITHUB_TOKEN") or None)
     google_credentials: Path = field(default_factory=lambda: _path("GOOGLE_CREDENTIALS_FILE", "credentials.json"))
