@@ -112,6 +112,9 @@ def _ics(task: dict, start: datetime, end: datetime, emails: list[str]) -> str:
 def schedule_meeting(meeting_id: str, task: dict) -> dict:
     if not task.get("start_datetime"):
         return {"ok": False, "detail": "No time was given in the meeting; needs a human to pick one."}
+    if config.TEST_LABEL:
+        task = {**task, "title": f"[TEST] {task['title']}",
+                "agenda": [f"{config.TEST_LABEL}"] + list(task.get("agenda", []))}
     start = datetime.fromisoformat(task["start_datetime"])
     end = start + timedelta(minutes=task.get("duration_minutes") or 30)
     emails = [u["email"] for u in db.team() if u["handle"] in task.get("attendees", []) and u.get("email")]

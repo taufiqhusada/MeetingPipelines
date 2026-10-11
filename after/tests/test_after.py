@@ -268,3 +268,11 @@ def test_private_contacts_override_seed(tmp_path):
     (tmp_path / "team_contacts.json").write_text('{"george": {"email": "g@example.com"}}')
     db.init()
     assert {u["handle"]: u["email"] for u in db.team()}["george"] == "g@example.com"
+
+
+def test_test_label_marks_calendar_events(demo_meeting, monkeypatch):
+    monkeypatch.setattr(config, "TEST_LABEL", "This is a test, no action needed.")
+    task = next(t for t in demo_meeting["agent_tasks"] if t["kind"] == "schedule_meeting")
+    pipeline.decide(task["id"], approve=True)
+    ics = (config.OUTPUT_DIR / "invites" / "sync-2026-10-11-next.ics").read_text()
+    assert "SUMMARY:[TEST] " in ics and "This is a test, no action needed." in ics

@@ -36,6 +36,8 @@ SLACK_ONLY_TO = os.getenv("SLACK_ONLY_TO", "")
 GOOGLE_CREDENTIALS_FILE = Path(os.getenv("GOOGLE_CREDENTIALS_FILE", DATA_DIR / "google_credentials.json"))
 GOOGLE_TOKEN_FILE = Path(os.getenv("GOOGLE_TOKEN_FILE", DATA_DIR / "google_token.json"))
 TIMEZONE = os.getenv("TIMEZONE", "America/Los_Angeles")
+# When set, calendar events are titled "[TEST] ..." and say they are a test (for live trials with real invites).
+TEST_LABEL = os.getenv("TEST_LABEL", "")
 
 # Optional for Search (anonymous works). Required for Act, and the key must be on Darwin's Act pilot allowlist.
 DARWIN_API_KEY = os.getenv("DARWIN_API_KEY", "")
