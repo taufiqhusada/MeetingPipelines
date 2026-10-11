@@ -36,6 +36,8 @@ SLACK_ONLY_TO = os.getenv("SLACK_ONLY_TO", "")
 GOOGLE_CREDENTIALS_FILE = Path(os.getenv("GOOGLE_CREDENTIALS_FILE", DATA_DIR / "google_credentials.json"))
 GOOGLE_TOKEN_FILE = Path(os.getenv("GOOGLE_TOKEN_FILE", DATA_DIR / "google_token.json"))
 TIMEZONE = os.getenv("TIMEZONE", "America/Los_Angeles")
+# Google Meet captions call the person running TranscripTonic "You"; replace it with their real name.
+TRANSCRIPT_SELF_NAME = os.getenv("TRANSCRIPT_SELF_NAME", "")
 # When set, calendar events are titled "[TEST] ..." and say they are a test (for live trials with real invites).
 TEST_LABEL = os.getenv("TEST_LABEL", "")
 

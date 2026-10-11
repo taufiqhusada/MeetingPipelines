@@ -3,6 +3,7 @@
 Everything goes through `outbox()` so the UI shows what was (or would have been) sent.
 """
 import json
+import re
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -91,6 +92,25 @@ def slack_message(meeting_id: str, text: str, handle: str | None = None, files: 
     return outbox(meeting_id, "slack", target, body, send if config.SLACK_BOT_TOKEN else None)
 
 
+def slack_approval_request(meeting_id: str, meeting_title: str, tasks: list[dict]) -> dict:
+    """Post agent tasks with Approve / Reject buttons (handled by after/slack_actions.py)."""
+    from .slack_actions import approval_blocks
+    target = config.SLACK_ONLY_TO or config.SLACK_CHANNEL
+    blocks = approval_blocks(meeting_title, tasks, f"{config.BASE_URL}/?meeting={meeting_id}")
+    text = f"{len(tasks)} agent task(s) from {meeting_title} need approval"
+
+    def send():
+        from src.slack.messaging import _resolve_channel, _resolve_user, client
+        if config.SLACK_ONLY_TO:
+            channel = client.conversations_open(users=_resolve_user(target))["channel"]["id"]
+        else:
+            channel = _resolve_channel(target)
+        return client.chat_postMessage(channel=channel, text=text, blocks=blocks)["ts"]
+
+    body = text + "\n" + "\n".join(f"[Approve | Reject] {t['title']}" for t in tasks)
+    return outbox(meeting_id, "slack", target, body, send if config.SLACK_BOT_TOKEN else None)
+
+
 # ---------------------------------------------------------------- Calendar
 
 def _ics(task: dict, start: datetime, end: datetime, emails: list[str]) -> str:
@@ -112,6 +132,9 @@ def _ics(task: dict, start: datetime, end: datetime, emails: list[str]) -> str:
 def schedule_meeting(meeting_id: str, task: dict) -> dict:
     if not task.get("start_datetime"):
         return {"ok": False, "detail": "No time was given in the meeting; needs a human to pick one."}
+    # Task titles are imperative ("Schedule next sync"); the event should just be "Next sync".
+    name = re.sub(r"^(schedule|set up|setup|book|arrange|organize)\s+(a\s+|an\s+|the\s+)?", "", task["title"], flags=re.I)
+    task = {**task, "title": name[:1].upper() + name[1:]}
     if config.TEST_LABEL:
         task = {**task, "title": f"[TEST] {task['title']}",
                 "agenda": [f"{config.TEST_LABEL}"] + list(task.get("agenda", []))}
