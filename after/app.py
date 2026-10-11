@@ -77,6 +77,20 @@ def decide(task_id: int, decision: str):
     return _run(pipeline.decide, task_id, decision == "approve")
 
 
+class DarwinRunIn(BaseModel):
+    agent_id: str
+
+
+@app.post("/api/agent-tasks/{task_id}/darwin")
+def run_via_darwin(task_id: int, body: DarwinRunIn):
+    return _run(pipeline.run_via_darwin, task_id, body.agent_id)
+
+
+@app.post("/api/agent-tasks/{task_id}/darwin/refresh")
+def refresh_darwin(task_id: int):
+    return _run(pipeline.refresh_darwin, task_id)
+
+
 # Recall.ai: send a bot to a live meeting, then process its transcript once the call ends.
 @app.post("/api/recall/bots")
 def recall_bot(body: RecallIn):

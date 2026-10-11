@@ -10,6 +10,14 @@ from after import analyze, config, db, executors, pipeline, transcripts
 SEED_VTT = config.SEED_DIR / "transcripts" / "before_kickoff_sample.vtt"
 
 
+def fake_darwin_search(q, max_results=3):
+    return {"query": q, "status": "completed", "error": None, "searchId": "srch_1", "searchToken": "tok_secret",
+            "agents": [{"name": f"agent for {q}", "agentId": "ag_ready", "capabilityId": "cap_1", "description": "",
+                        "readiness": "ready", "canStartThread": True, "connectionPrompt": "prompt", "why": ""},
+                       {"name": "stub", "agentId": "ag_blocked", "capabilityId": "cap_2", "description": "",
+                        "readiness": "unavailable", "canStartThread": False, "connectionPrompt": "prompt", "why": ""}]}
+
+
 @pytest.fixture(autouse=True)
 def offline(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "after.db")
@@ -18,11 +26,8 @@ def offline(tmp_path, monkeypatch):
     for key in ("ANTHROPIC_API_KEY", "SLACK_BOT_TOKEN", "GITHUB_TOKEN", "RECALL_API_KEY", "SLACK_ONLY_TO"):
         monkeypatch.setattr(config, key, "")
     monkeypatch.setattr(config, "DRY_RUN", True)
-    monkeypatch.setattr(
-        executors, "darwin_search",
-        lambda q, max_results=3: {"query": q, "status": "completed", "error": None,
-                                  "agents": [{"name": f"agent for {q}", "description": "", "readiness": "unavailable", "why": ""}]},
-    )
+    monkeypatch.setattr(config, "DARWIN_API_KEY", "")
+    monkeypatch.setattr(executors, "darwin_search", fake_darwin_search)
     db.init()
 
 
@@ -187,3 +192,72 @@ def test_api(monkeypatch):
     assert "feature_test.txt" in names and "before_kickoff_sample.vtt" in names
     page = client.get("/")
     assert page.status_code == 200 and "Meeting Agent" in page.text
+
+
+# ---------------------------------------------------------------- Darwin Act
+
+class FakeResponse:
+    def __init__(self, status, data):
+        self.status_code, self._data, self.content = status, data, b"x"
+
+    def json(self):
+        return self._data
+
+
+def _other_task(meeting):
+    return next(t for t in meeting["agent_tasks"] if t["kind"] == "other")
+
+
+def test_search_token_never_reaches_the_browser(demo_meeting):
+    assert all("searchToken" not in t["darwin"] for t in demo_meeting["agent_tasks"])
+    assert db.rows("SELECT darwin_json FROM agent_tasks")[0]["darwin_json"].count("tok_secret") == 1
+
+
+def test_act_needs_a_key(demo_meeting):
+    with pytest.raises(RuntimeError, match="DARWIN_API_KEY"):
+        pipeline.run_via_darwin(_other_task(demo_meeting)["id"], "ag_ready")
+
+
+def test_act_refuses_unstartable_agent(demo_meeting, monkeypatch):
+    monkeypatch.setattr(config, "DARWIN_API_KEY", "dk_test")
+    with pytest.raises(RuntimeError, match="can't start a thread"):
+        pipeline.run_via_darwin(_other_task(demo_meeting)["id"], "ag_blocked")
+    assert _other_task(pipeline.get_meeting(demo_meeting["id"]))["approval"] == "pending"
+
+
+def test_act_start_and_refresh(demo_meeting, monkeypatch):
+    monkeypatch.setattr(config, "DARWIN_API_KEY", "dk_test")
+    sent = {}
+
+    def fake_post(url, headers, json, timeout):
+        sent.update(url=url, headers=headers, body=json)
+        return FakeResponse(202, {"actRequestId": "actreq_1", "threads": [{"threadId": "thr_1"}]})
+
+    monkeypatch.setattr(executors.httpx, "post", fake_post)
+    monkeypatch.setattr(executors.httpx, "get",
+                        lambda url, params, headers, timeout: FakeResponse(200, {"url": url, "params": params}))
+    task = _other_task(demo_meeting)
+    m = pipeline.run_via_darwin(task["id"], "ag_ready")
+
+    assert sent["url"].endswith("/api/v3/act")
+    assert sent["body"]["searchId"] == "srch_1" and sent["body"]["agentIds"] == ["ag_ready"]
+    assert "without explicit approval" in sent["body"]["message"]
+    assert sent["headers"]["Authorization"] == "Bearer dk_test"
+    assert sent["headers"]["X-Search-Token"] == "tok_secret"
+    assert sent["headers"]["Idempotency-Key"] == f"{demo_meeting['id']}-{task['id']}-ag_ready"
+    row = _other_task(m)
+    assert row["approval"] == "approved" and row["act"]["actRequestId"] == "actreq_1"
+
+    latest = _other_task(pipeline.refresh_darwin(task["id"]))["act"]["latest"]
+    assert latest["url"].endswith("/act/requests/actreq_1") and latest["params"] == {"includeThreadState": "true"}
+
+    with pytest.raises(RuntimeError, match="already approved"):
+        pipeline.run_via_darwin(task["id"], "ag_ready")
+
+
+def test_act_preview_403_is_surfaced(demo_meeting, monkeypatch):
+    monkeypatch.setattr(config, "DARWIN_API_KEY", "dk_test")
+    monkeypatch.setattr(executors.httpx, "post",
+                        lambda *a, **k: FakeResponse(403, {"code": "ACT_PREVIEW_ACCESS_REQUIRED"}))
+    with pytest.raises(RuntimeError, match="ACT_PREVIEW_ACCESS_REQUIRED"):
+        pipeline.run_via_darwin(_other_task(demo_meeting)["id"], "ag_ready")

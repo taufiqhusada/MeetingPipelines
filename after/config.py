@@ -37,7 +37,8 @@ GOOGLE_CREDENTIALS_FILE = Path(os.getenv("GOOGLE_CREDENTIALS_FILE", DATA_DIR / "
 GOOGLE_TOKEN_FILE = Path(os.getenv("GOOGLE_TOKEN_FILE", DATA_DIR / "google_token.json"))
 TIMEZONE = os.getenv("TIMEZONE", "America/Los_Angeles")
 
-DARWIN_API_KEY = os.getenv("DARWIN_API_KEY", "")  # optional: anonymous search works with a rate limit
+# Optional for Search (anonymous works). Required for Act, and the key must be on Darwin's Act pilot allowlist.
+DARWIN_API_KEY = os.getenv("DARWIN_API_KEY", "")
 
 BASE_URL = os.getenv("AFTER_BASE_URL", "http://localhost:8000")
 
@@ -60,6 +61,8 @@ def flags() -> list[dict]:
         out.append({"key": "GITHUB_TOKEN", "impact": "GitHub issues go to the outbox only."})
     if not GOOGLE_TOKEN_FILE.exists():
         out.append({"key": "Google Calendar", "impact": "Run `python -m after.google_setup`; until then meetings are .ics files."})
+    if not DARWIN_API_KEY:
+        out.append({"key": "DARWIN_API_KEY", "impact": "Darwin Search only; 'Run via Darwin' (Act) is off."})
     if DRY_RUN:
         out.append({"key": "DRY_RUN=1", "impact": "Nothing is sent externally. Set DRY_RUN=0 to go live."})
     return out

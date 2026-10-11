@@ -155,15 +155,27 @@ def _darwin_queries(query: str) -> list[str]:
     return out
 
 
-def darwin_search(query: str, max_results: int = 3) -> dict:
-    """Find agents on the agentic web that could do this task. Search only: we never act through Darwin."""
+DARWIN_API = "https://api.darwin.so/api/v3"
+
+
+def _darwin_headers(search_token: str | None = None) -> dict:
     headers = {"Content-Type": "application/json"}
     if config.DARWIN_API_KEY:
         headers["Authorization"] = f"Bearer {config.DARWIN_API_KEY}"
+    if search_token:  # anonymous Search: the token proves we own the searchId
+        headers["X-Search-Token"] = search_token
+    return headers
+
+
+def darwin_search(query: str, max_results: int = 3) -> dict:
+    """Find agents on the agentic web that could do this task (Darwin Search).
+
+    Keeps everything Act needs later: searchId/searchToken and each agent's agentId + canStartThread.
+    """
     data, error = None, None
     for q in _darwin_queries(query):
         try:
-            r = httpx.post("https://darwin.so/api/v3/search", headers=headers,
+            r = httpx.post(f"{DARWIN_API}/search", headers=_darwin_headers(),
                            json={"query": q, "maxResults": max_results}, timeout=30)
             if r.status_code >= 500:
                 error = f"Darwin returned {r.status_code}"
@@ -181,15 +193,60 @@ def darwin_search(query: str, max_results: int = 3) -> dict:
     return {
         "query": query,
         "status": data.get("status"),
+        "searchId": data.get("searchId"),
+        "responseId": data.get("responseId"),
+        "searchToken": data.get("searchToken"),  # server-side only; stripped before reaching the browser
         # needs_input: Darwin asks a clarifying question instead of returning matches
-        "error": None if agents else (resp.get("question") or resp.get("overview") or "No matching agents"),
+        "error": None if agents else (resp.get("question") or resp.get("noMatchReason") or resp.get("overview")
+                                      or "No matching agents"),
         "agents": [
             {
                 "name": a.get("name"),
+                "agentId": a.get("agentId"),
+                "capabilityId": a.get("capabilityId"),
                 "description": (a.get("description") or "")[:240],
                 "readiness": a.get("readiness"),
+                "canStartThread": bool(a.get("canStartThread")),
+                "requiredSetup": a.get("requiredSetup"),
                 "why": (a.get("reasons") or [""])[0],
+                "uncertainties": a.get("uncertainties") or [],
+                "connectionPrompt": a.get("connectionPrompt"),
             }
             for a in agents
         ],
     }
+
+
+def darwin_act_start(darwin: dict, agent_id: str, message: str, idempotency_key: str) -> dict:
+    """Start a Darwin Act thread with one agent from a stored Search result.
+
+    Act is a pilot: the key must be on Darwin's allowlist (else 403 ACT_PREVIEW_ACCESS_REQUIRED), and the agent
+    must have canStartThread. A 2xx means Darwin accepted the request, not that the provider finished.
+    """
+    if not config.DARWIN_API_KEY:
+        raise RuntimeError("DARWIN_API_KEY is not set (Act needs an allowlisted Darwin key)")
+    agent = next((a for a in darwin.get("agents", []) if a["agentId"] == agent_id), None)
+    if not agent:
+        raise RuntimeError("Agent is not part of this task's Darwin search")
+    if not agent["canStartThread"]:
+        raise RuntimeError(f"Darwin says '{agent['name']}' can't start a thread (readiness: {agent['readiness']})")
+    r = httpx.post(
+        f"{DARWIN_API}/act",
+        headers={**_darwin_headers(darwin.get("searchToken")), "Idempotency-Key": idempotency_key},
+        json={"searchId": darwin["searchId"], "agentIds": [agent_id], "message": message},
+        timeout=60,
+    )
+    data = r.json() if r.content else {}
+    if r.status_code >= 400:
+        raise RuntimeError(f"Darwin Act {r.status_code}: {data.get('code') or data.get('message') or data}")
+    return data
+
+
+def darwin_act_get(act_request_id: str) -> dict:
+    """Read an Act request with thread state (messages + pending auth/approval/payment requests)."""
+    r = httpx.get(f"{DARWIN_API}/act/requests/{act_request_id}", params={"includeThreadState": "true"},
+                  headers=_darwin_headers(), timeout=30)
+    data = r.json() if r.content else {}
+    if r.status_code >= 400:
+        raise RuntimeError(f"Darwin Act {r.status_code}: {data.get('code') or data.get('message') or data}")
+    return data

@@ -138,6 +138,40 @@ def decide(task_id: int, approve: bool) -> dict:
     return get_meeting(mid)
 
 
+def run_via_darwin(task_id: int, agent_id: str) -> dict:
+    """Approve an agent task by handing it to a Darwin agent (Act). Pending auth/payment stays with the human."""
+    row = db.rows("SELECT * FROM agent_tasks WHERE id = ?", task_id)[0]
+    if row["approval"] != "pending":
+        raise RuntimeError(f"Task already {row['approval']}")
+    task, darwin = json.loads(row["payload_json"]), json.loads(row["darwin_json"] or "{}")
+    message = (f"{task['title']}. {task['details']}\n"
+               f"Context: requested in the meeting \"{row['meeting_id']}\": \"{task['source_quote']}\".\n"
+               "Please confirm the requirements first. Do not make any purchase or payment without explicit approval.")
+    act = executors.darwin_act_start(darwin, agent_id, message, idempotency_key=f"{row['meeting_id']}-{task_id}-{agent_id}")
+    result = {"ok": True, "detail": f"Started a Darwin Act thread with {agent_id}", "via": "darwin"}
+    db.execute("UPDATE agent_tasks SET approval='approved', result_json=?, act_json=? WHERE id=?",
+               json.dumps(result), json.dumps(act), task_id)
+    executors.slack_message(row["meeting_id"], f"Approved: *{task['title']}*, handed to a Darwin agent. "
+                            "Any login or payment request will need a human.", task.get("requested_by"))
+    return get_meeting(row["meeting_id"])
+
+
+def refresh_darwin(task_id: int) -> dict:
+    row = db.rows("SELECT * FROM agent_tasks WHERE id = ?", task_id)[0]
+    act = json.loads(row["act_json"] or "{}")
+    req_id = act.get("actRequestId") or act.get("id")
+    if not req_id:
+        raise RuntimeError("No Darwin Act request for this task")
+    db.execute("UPDATE agent_tasks SET act_json=? WHERE id=?",
+               json.dumps({**act, "latest": executors.darwin_act_get(req_id)}), task_id)
+    return get_meeting(row["meeting_id"])
+
+
+def _public_darwin(d: dict | None) -> dict | None:
+    """The searchToken authorizes follow-ups on our search; never send it to the browser."""
+    return {k: v for k, v in d.items() if k != "searchToken"} if d else d
+
+
 def get_meeting(meeting_id: str) -> dict:
     m = db.rows("SELECT * FROM meetings WHERE id = ?", meeting_id)
     if not m:
@@ -155,7 +189,7 @@ def get_meeting(meeting_id: str) -> dict:
         ],
         "agent_tasks": [
             {**t, "payload": loads(t.pop("payload_json")), "result": loads(t.pop("result_json")),
-             "darwin": loads(t.pop("darwin_json"))}
+             "darwin": _public_darwin(loads(t.pop("darwin_json"))), "act": loads(t.pop("act_json"))}
             for t in db.rows("SELECT * FROM agent_tasks WHERE meeting_id=? ORDER BY id", meeting_id)
         ],
         "outbox": db.rows("SELECT * FROM outbox WHERE meeting_id=? ORDER BY id", meeting_id),
