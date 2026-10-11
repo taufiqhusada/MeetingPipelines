@@ -211,7 +211,7 @@ class WorkerLoopTests(unittest.TestCase):
             {"job": None}, {"job": job}, {"ok": True}, KeyboardInterrupt(),
         ]) as http, patch("meetpipe.worker._run_job", return_value={"brief": sample_brief()}) as retrieve:
             worker.serve("/fixture/checkout", "codex", poll_wait=10)
-        retrieve.assert_called_once_with(job, "/fixture/checkout", "codex")
+        retrieve.assert_called_once_with(job, "/fixture/checkout", "codex", worker.worker_sources())
         self.assertEqual([call.args[2] for call in http.call_args_list], ["GET", "GET", "POST", "GET"])
 
     def test_retrieval_error_is_reported_and_worker_resumes_waiting(self):

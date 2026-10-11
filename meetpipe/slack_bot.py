@@ -146,7 +146,9 @@ def _collect_team_brief(scope, options: dict, llm_name: str | None = None) -> Ru
 
     # Gather common sources on the bot host while teammates retrieve their
     # private agent history locally in parallel.
-    shared = prepare(scope, sources=["github", "gmail", "drive", "local"], llm_name=llm_name,
+    shared_sources = [s.strip() for s in os.getenv("MEETPIPE_SHARED_SOURCES", "github,gmail,drive,local").split(",")
+                      if s.strip()]
+    shared = prepare(scope, sources=shared_sources, llm_name=llm_name,
                      log=lambda line: print(line, flush=True))
     deadline = float(job["deadline"])
     view = {"workers": []}
@@ -175,9 +177,12 @@ def _collect_team_brief(scope, options: dict, llm_name: str | None = None) -> Ru
             completed.append(worker_id)
 
     source_status = dict(shared.status)
-    for source in ("claude_code", "codex"):
+    worker_source_names = {s for r in worker_rows if r.get("status") == "complete"
+                           for s in ((r.get("result") or {}).get("status") or {})}
+    for source in sorted(worker_source_names | {"claude_code", "codex"}):
         counts = [int((r.get("result") or {}).get("status", {}).get(source, {}).get("items", 0))
                   for r in worker_rows if r.get("status") == "complete"]
+        counts.append(int((shared.status.get(source) or {}).get("items", 0)))  # master's own fetch, if any
         source_status[source] = {"status": "ok" if any(counts) else "skipped", "items": sum(counts)}
     source_status["workers"] = {
         "status": "ok" if responded else "error",
@@ -214,8 +219,11 @@ def serve(path: str = ".", llm_name: str | None = None) -> None:
 
     llm_name = llm_name or settings.llm
     app = App(token=os.environ["SLACK_BOT_TOKEN"])
-    from after.slack_actions import register as register_after_actions
-    register_after_actions(app)
+    try:  # After stage: Approve / Reject buttons for agent tasks (after/slack_actions.py)
+        from after.slack_actions import register as register_after_actions
+        register_after_actions(app)
+    except ImportError:
+        pass
     busy = threading.Lock()
     host = socket.gethostname().split(".")[0]
     coordinator_url = os.getenv("MEETPIPE_COORDINATOR_URL", "")
