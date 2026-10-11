@@ -1,4 +1,4 @@
-"""CLI: doctor | connect | setup-github | run | slack-bot | aggregate."""
+"""CLI: doctor | connect | setup-github | run | slack-bot | coordinator | worker | aggregate."""
 
 from __future__ import annotations
 
@@ -112,6 +112,18 @@ def cmd_slack_bot(args) -> int:
     return 0
 
 
+def cmd_coordinator(args) -> int:
+    from .coordinator import serve
+    serve(host=args.host, port=args.port)
+    return 0
+
+
+def cmd_worker(args) -> int:
+    from .worker import serve
+    serve(path=args.path, llm_name=args.llm, poll_wait=args.wait)
+    return 0
+
+
 def cmd_aggregate(args) -> int:
     briefs, index = {}, {}
     for spec in args.briefs:
@@ -171,6 +183,19 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--path", default=".", help="local repo the bot prepares briefs for")
     sb.add_argument("--llm", default=settings.llm, choices=["claude", "codex"])
     sb.set_defaults(fn=cmd_slack_bot)
+
+    co = sub.add_parser("coordinator", help="serve the authenticated job API for local workers")
+    co.add_argument("--host", default=os.getenv("MEETPIPE_COORDINATOR_HOST", "127.0.0.1"))
+    co.add_argument("--port", type=int, default=int(os.getenv("MEETPIPE_COORDINATOR_PORT", "8766")))
+    co.set_defaults(fn=cmd_coordinator)
+
+    w = sub.add_parser("worker", help="long-poll for Slack-triggered local context jobs")
+    w.add_argument("--path", default=os.getenv("MEETPIPE_WORKER_PATH", "."),
+                   help="local repo checkout to search for Claude/Codex sessions")
+    w.add_argument("--llm", default=settings.llm, choices=["claude", "codex"])
+    w.add_argument("--wait", type=int, default=int(os.getenv("MEETPIPE_WORKER_LONGPOLL_SECONDS", "285")),
+                   help="long-poll duration in seconds (10–300; default 285)")
+    w.set_defaults(fn=cmd_worker)
 
     g = sub.add_parser("aggregate", help="merge several briefs into one team brief")
     g.add_argument("briefs", nargs="+", help="run dirs or brief.json paths, optionally label=path")

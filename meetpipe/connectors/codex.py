@@ -35,40 +35,41 @@ def _tool_input(payload: dict) -> str:
 
 def _parse(file: Path, scope: RunScope) -> tuple[str, SessionDigest] | None:
     s, sid = SessionDigest(), file.stem
-    for line in file.open(encoding="utf-8", errors="replace"):
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        p = rec.get("payload") or {}
-        if rec.get("type") == "session_meta":
-            sid = p.get("id") or sid
-            s.cwd = p.get("cwd")
-            if not in_scope(s.cwd, scope.path):
-                return None
-            s.branch = (p.get("git") or {}).get("branch")
-            continue
-        if rec.get("type") != "response_item":
-            continue
-        ts = parse_ts(rec.get("timestamp"))
-        if not ts or ts < scope.since:
-            continue
-        ptype = p.get("type")
-        if ptype == "message" and p.get("role") == "user":
-            s.touch(ts)
-            text = _text(p.get("content"), "input_text")
-            if not text.lstrip().startswith("<"):  # skip injected context blocks
-                s.user(text)
-        elif ptype == "message" and p.get("role") == "assistant":
-            s.touch(ts)
-            s.assistant(_text(p.get("content"), "output_text"),
-                        limit=300 if p.get("phase") == "commentary" else 1500)
-        elif ptype in ("custom_tool_call", "function_call", "local_shell_call"):
-            cmd = _tool_input(p)
-            for path in _PATCH_FILE.findall(cmd):
-                s.file(path.strip())
-            if "*** Begin Patch" not in cmd:
-                s.command(f"[{p.get('name', 'shell')}] {cmd}")
+    with file.open(encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            p = rec.get("payload") or {}
+            if rec.get("type") == "session_meta":
+                sid = p.get("id") or sid
+                s.cwd = p.get("cwd")
+                if not in_scope(s.cwd, scope.path):
+                    return None
+                s.branch = (p.get("git") or {}).get("branch")
+                continue
+            if rec.get("type") != "response_item":
+                continue
+            ts = parse_ts(rec.get("timestamp"))
+            if not ts or ts < scope.since:
+                continue
+            ptype = p.get("type")
+            if ptype == "message" and p.get("role") == "user":
+                s.touch(ts)
+                text = _text(p.get("content"), "input_text")
+                if not text.lstrip().startswith("<"):  # skip injected context blocks
+                    s.user(text)
+            elif ptype == "message" and p.get("role") == "assistant":
+                s.touch(ts)
+                s.assistant(_text(p.get("content"), "output_text"),
+                            limit=300 if p.get("phase") == "commentary" else 1500)
+            elif ptype in ("custom_tool_call", "function_call", "local_shell_call"):
+                cmd = _tool_input(p)
+                for path in _PATCH_FILE.findall(cmd):
+                    s.file(path.strip())
+                if "*** Begin Patch" not in cmd:
+                    s.command(f"[{p.get('name', 'shell')}] {cmd}")
     return (sid, s) if s.turns else None
 
 
