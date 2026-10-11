@@ -1,0 +1,33 @@
+{
+  "meeting_id": "mp-weekly-sync-2026-10-11",
+  "title": "MeetingPipelines weekly sync",
+  "date": "2026-10-11",
+  "attendees": ["taufiq", "michael", "george"],
+  "source": "demo",
+  "lines": [
+    {"speaker": "Taufiq", "t": 0, "text": "Okay, weekly sync. I posted the prep brief in the channel ten minutes ago, so let's go through it instead of doing status from memory."},
+    {"speaker": "Taufiq", "t": 9, "text": "First goal from the design review: connectors end to end on real data. That's done. Claude Code, Codex, GitHub, Gmail and Drive all ran in one brief, and the connect page works for Google and GitHub."},
+    {"speaker": "Michael", "t": 22, "text": "Nice. On my side, the brief says Slack is not started, but that's outdated. The Slack wrapper is merged on main now. Posting to channels and DMs both work."},
+    {"speaker": "Taufiq", "t": 33, "text": "Yeah, and I hooked the meeting prep bot onto it. You tag agent, generate meeting prep, and it posts the brief in the thread. It worked in test-bot-features today."},
+    {"speaker": "Michael", "t": 44, "text": "One problem: we had two processes listening on the same Slack app, so mentions got split randomly. We need one host for the bot."},
+    {"speaker": "Taufiq", "t": 53, "text": "Agreed, I'll host it for now. Michael, can you add a proper router so one listener handles prep, join and wrap up commands? Let's say by Wednesday."},
+    {"speaker": "Michael", "t": 63, "text": "Sure, Wednesday works."},
+    {"speaker": "George", "t": 68, "text": "My item, the after-meeting spec, is still not in Drive. Honestly the after stage already exists in PR one, so I'd rather document what's built than write a spec from scratch."},
+    {"speaker": "Taufiq", "t": 80, "text": "That makes sense. So George turns the after README into the spec and adds the open scope questions. Can you do that by Monday?"},
+    {"speaker": "George", "t": 87, "text": "Monday, yes."},
+    {"speaker": "Taufiq", "t": 90, "text": "For recording the meeting itself we tried Fireflies. The API works, but the bot didn't record our test call, it ended up on the wrong account I think."},
+    {"speaker": "George", "t": 100, "text": "Let's still go with Fireflies, the free plan has an API. Recall is paid."},
+    {"speaker": "Taufiq", "t": 106, "text": "Decision then: Fireflies is the recorder for the meeting stage. I'll make sure the Fireflies transcript flows into the after stage automatically, by Thursday."},
+    {"speaker": "Michael", "t": 116, "text": "Also the Codex summarizer still returns 401. Do we care?"},
+    {"speaker": "Taufiq", "t": 121, "text": "Not for the demo. Claude Code is the default backend. We'll leave the Codex issue open."},
+    {"speaker": "George", "t": 128, "text": "What about aggregating everyone's briefs? We said shared folder last time."},
+    {"speaker": "Taufiq", "t": 134, "text": "Still the plan, but nobody owns it yet. Let's leave that open and pick an owner next week."},
+    {"speaker": "Michael", "t": 141, "text": "Someone also needs to rehearse the demo end to end before Friday."},
+    {"speaker": "Taufiq", "t": 147, "text": "Agent, please schedule a demo rehearsal with all three of us on Thursday at 3pm for 45 minutes."},
+    {"speaker": "Taufiq", "t": 155, "text": "And agent, make a one page visual report of this meeting for the channel."},
+    {"speaker": "George", "t": 161, "text": "Last thing, we should buy a custom domain for the demo landing page."},
+    {"speaker": "Taufiq", "t": 166, "text": "Agent, find someone who can register a domain for us, but don't buy anything without approval."},
+    {"speaker": "Taufiq", "t": 173, "text": "Goals for next week: one Slack listener with a command router, Fireflies transcripts flowing into after automatically, the after spec in Drive, and a full rehearsal done."},
+    {"speaker": "Taufiq", "t": 186, "text": "Thanks everyone."}
+  ]
+}

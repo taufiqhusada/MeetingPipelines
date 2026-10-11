@@ -31,7 +31,8 @@ HELP = ("*Meeting prep agent*\n"
         "The coordinator asks each online teammate's local worker for repo-scoped Claude/Codex context, "
         "then combines it with shared GitHub, Gmail and Drive sources.")
 SOURCE_LABEL = {"claude_code": "Claude Code", "codex": "Codex", "github": "GitHub", "gmail": "Gmail",
-                "drive": "Drive", "local": "Local files", "workers": "Local workers"}
+                "drive": "Drive", "local": "Local files", "workers": "Local workers",
+                "fireflies": "Fireflies", "after": "After records"}
 CHUNK = 3500  # stay well under Slack's per-message rendering limits
 
 
@@ -186,25 +187,23 @@ def _collect_team_brief(scope, options: dict, llm_name: str = "claude") -> RunRe
     if not briefs:
         shared.status = source_status
         return shared
-    if len(briefs) == 1:
-        final_brief = next(iter(briefs.values()))
-        # The one source's citation IDs remain unprefixed.
-        final_index = {k.split(":", 1)[1]: v for k, v in index.items()}
-    else:
-        final_brief = brief_mod.aggregate(briefs, LLM(llm_name))
-        final_index = index
+    # Always merge (even a single brief) so the per-person view exists.
+    final_brief = brief_mod.aggregate(briefs, LLM(llm_name))
+    final_index = index
 
     title = f"Team pre-meeting brief: {scope.meeting or scope.repo or 'project sync'}"
-    final_md = brief_mod.to_markdown(final_brief, final_index, title)
     missing = [f"{r['worker_id']} ({r['status']})" for r in worker_rows if r['status'] != "complete"]
     missing += [f"{r['worker_id']} (no matching context)" for r in worker_rows
                 if r['status'] == "complete" and not (r.get("result") or {}).get("brief")]
-    if missing:
-        final_md += "\n\n---\n_Coverage: no result from " + ", ".join(missing) + "._"
+    coverage = ("\n\n_No result from " + ", ".join(missing) + "._") if missing else ""
+    # Slack gets the short per-person view; the detailed brief is attached as brief.md.
+    slack_md = (brief_mod.to_people_markdown(final_brief, final_index, title)
+                if final_brief.get("people") else brief_mod.to_markdown(final_brief, final_index, title)) + coverage
     (shared.run_dir / "brief.json").write_text(json.dumps(final_brief, indent=2, ensure_ascii=False))
-    (shared.run_dir / "brief.md").write_text(final_md)
+    (shared.run_dir / "brief.md").write_text(brief_mod.to_markdown(final_brief, final_index, title) + coverage)
+    (shared.run_dir / "brief_people.md").write_text(slack_md)
     return RunResult(run_dir=shared.run_dir, status=source_status, index=final_index,
-                     brief=final_brief, markdown=final_md, title=title)
+                     brief=final_brief, markdown=slack_md, title=title)
 
 
 def serve(path: str = ".", llm_name: str = "claude") -> None:
