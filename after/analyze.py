@@ -36,7 +36,7 @@ def _prompt(t: Transcript) -> str:
     return (
         f"Meeting: {t.title}\nMeeting date: {t.date}\n\n"
         f"<team>\n{json.dumps(team, indent=1)}\n</team>\n\n"
-        f"<previous_goals>\n{json.dumps(db.previous_goals(t.date), indent=1)}\n</previous_goals>\n\n"
+        f"<previous_goals>\n{json.dumps(db.previous_goals(t.date, t.meeting_id), indent=1)}\n</previous_goals>\n\n"
         f"<transcript>\n{lines}\n</transcript>"
     )
 

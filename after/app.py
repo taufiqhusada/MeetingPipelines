@@ -70,13 +70,7 @@ def meeting(meeting_id: str):
     return _run(pipeline.get_meeting, meeting_id)
 
 
-@app.post("/api/agent-tasks/{task_id}/{decision}")
-def decide(task_id: int, decision: str):
-    if decision not in ("approve", "reject"):
-        raise HTTPException(400, "decision must be approve or reject")
-    return _run(pipeline.decide, task_id, decision == "approve")
-
-
+# Darwin routes must come before /{decision}, which would otherwise swallow "darwin".
 class DarwinRunIn(BaseModel):
     agent_id: str
 
@@ -89,6 +83,13 @@ def run_via_darwin(task_id: int, body: DarwinRunIn):
 @app.post("/api/agent-tasks/{task_id}/darwin/refresh")
 def refresh_darwin(task_id: int):
     return _run(pipeline.refresh_darwin, task_id)
+
+
+@app.post("/api/agent-tasks/{task_id}/{decision}")
+def decide(task_id: int, decision: str):
+    if decision not in ("approve", "reject"):
+        raise HTTPException(400, "decision must be approve or reject")
+    return _run(pipeline.decide, task_id, decision == "approve")
 
 
 # Recall.ai: send a bot to a live meeting, then process its transcript once the call ends.

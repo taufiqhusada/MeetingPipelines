@@ -3,6 +3,7 @@
 Everything goes through `outbox()` so the UI shows what was (or would have been) sent.
 """
 import json
+import re
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -112,6 +113,9 @@ def _ics(task: dict, start: datetime, end: datetime, emails: list[str]) -> str:
 def schedule_meeting(meeting_id: str, task: dict) -> dict:
     if not task.get("start_datetime"):
         return {"ok": False, "detail": "No time was given in the meeting; needs a human to pick one."}
+    # Task titles are imperative ("Schedule next sync"); the event should just be "Next sync".
+    name = re.sub(r"^(schedule|set up|setup|book|arrange|organize)\s+(a\s+|an\s+|the\s+)?", "", task["title"], flags=re.I)
+    task = {**task, "title": name[:1].upper() + name[1:]}
     if config.TEST_LABEL:
         task = {**task, "title": f"[TEST] {task['title']}",
                 "agenda": [f"{config.TEST_LABEL}"] + list(task.get("agenda", []))}

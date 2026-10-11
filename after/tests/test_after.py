@@ -189,6 +189,8 @@ def test_api(monkeypatch):
     assert client.get("/api/meetings/nope").status_code == 404
     assert client.post(f"/api/agent-tasks/{m['agent_tasks'][0]['id']}/maybe").status_code == 400
     assert client.post("/api/process/text", json={"text": "Sam: hi", "meeting_id": "x"}).status_code == 400
+    darwin = client.post(f"/api/agent-tasks/{m['agent_tasks'][2]['id']}/darwin", json={"agent_id": "ag_ready"})
+    assert darwin.status_code == 400 and "DARWIN_API_KEY" in darwin.json()["detail"]  # reached the Act route
     names = [x["name"] for x in client.get("/api/samples").json()]
     assert "feature_test.txt" in names and "before_kickoff_sample.vtt" in names
     page = client.get("/")
@@ -275,4 +277,13 @@ def test_test_label_marks_calendar_events(demo_meeting, monkeypatch):
     task = next(t for t in demo_meeting["agent_tasks"] if t["kind"] == "schedule_meeting")
     pipeline.decide(task["id"], approve=True)
     ics = (config.OUTPUT_DIR / "invites" / "sync-2026-10-11-next.ics").read_text()
-    assert "SUMMARY:[TEST] " in ics and "This is a test, no action needed." in ics
+    assert "SUMMARY:[TEST] Next weekly sync" in ics and "This is a test, no action needed." in ics
+
+
+def test_same_day_meeting_compares_against_earlier_one(demo_meeting):
+    later = transcripts.from_text("George: quick follow-up", "followup-2026-10-11", day="2026-10-11")
+    db.execute("INSERT INTO meetings (id, title, date, source) VALUES (?,?,?,?)", later.meeting_id, "f", later.date, "manual")
+    goals = db.previous_goals(later.date, later.meeting_id)
+    assert [g["goal"] for g in goals] == demo_meeting["analysis"]["next_meeting_goals"]
+    # a meeting never compares against itself
+    assert db.previous_goals("2026-10-11", "sync-2026-10-11")[0]["goal"].startswith("Before stage gathers")
