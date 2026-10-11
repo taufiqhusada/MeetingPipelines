@@ -22,6 +22,7 @@ def fake_darwin_search(q, max_results=3):
 def offline(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "after.db")
     monkeypatch.setattr(config, "OUTPUT_DIR", tmp_path / "output")
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(config, "GOOGLE_TOKEN_FILE", tmp_path / "no_google_token.json")
     for key in ("ANTHROPIC_API_KEY", "SLACK_BOT_TOKEN", "GITHUB_TOKEN", "RECALL_API_KEY", "SLACK_ONLY_TO"):
         monkeypatch.setattr(config, key, "")
@@ -261,3 +262,9 @@ def test_act_preview_403_is_surfaced(demo_meeting, monkeypatch):
                         lambda *a, **k: FakeResponse(403, {"code": "ACT_PREVIEW_ACCESS_REQUIRED"}))
     with pytest.raises(RuntimeError, match="ACT_PREVIEW_ACCESS_REQUIRED"):
         pipeline.run_via_darwin(_other_task(demo_meeting)["id"], "ag_ready")
+
+
+def test_private_contacts_override_seed(tmp_path):
+    (tmp_path / "team_contacts.json").write_text('{"george": {"email": "g@example.com"}}')
+    db.init()
+    assert {u["handle"]: u["email"] for u in db.team()}["george"] == "g@example.com"

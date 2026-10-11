@@ -67,6 +67,15 @@ Set `SLACK_ONLY_TO=<your slack username>` to redirect every Slack message to you
 | GET | `/api/recall/bots/{bot_id}` | Bot status / transcript readiness |
 | POST | `/api/recall/bots/{bot_id}/process` | Fetch the transcript and run the pipeline |
 
+## Team contacts
+
+`seed/team.json` holds names, roles, Slack usernames and GitHub handles. Emails (used for calendar invites) go in the
+git-ignored `after/data/team_contacts.json`, because this repo is public:
+
+```json
+{"george": {"email": "..."}, "michael": {"email": "..."}, "taufiq": {"email": "..."}}
+```
+
 ## Contracts for teammates
 
 - **Before**: reads `meetings.goals_json` (the goals the next meeting is compared against) and `human_tasks.status`. Team roles live in `seed/team.json` → `users` table until the shared DB is decided.

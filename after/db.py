@@ -52,6 +52,13 @@ def init():
                     "INSERT INTO users VALUES (?,?,?,?,?,?)",
                     (u["handle"], u["name"], u["role"], u.get("email"), u.get("slack_user_id"), u.get("github")),
                 )
+        # Private contact details (emails) live outside git: the repo is public.
+        contacts = config.DATA_DIR / "team_contacts.json"
+        if contacts.exists():
+            for handle, fields in json.loads(contacts.read_text()).items():
+                for col in ("email", "slack_user_id", "github"):
+                    if col in fields:
+                        c.execute(f"UPDATE users SET {col} = ? WHERE handle = ?", (fields[col], handle))
         prev = json.loads((config.SEED_DIR / "previous_meeting.json").read_text())
         c.execute(
             "INSERT OR IGNORE INTO meetings (id, title, date, source, goals_json) VALUES (?,?,?,?,?)",
