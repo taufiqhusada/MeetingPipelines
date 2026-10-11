@@ -26,7 +26,7 @@ from .llm import LLM
 from .runner import RunResult, make_scope, prepare
 
 TRIGGER = re.compile(r"\b(prep|brief|prepare)\b", re.I)
-HELP = ("*Meeting prep agent*\n"
+HELP = ("*Charlotte* · connects your work\n"
         "• `@agent generate meeting prep`: brief for the last 14 days\n"
         "• `@agent generate meeting prep since 7d for \"Weekly sync\"`: custom window + meeting focus\n"
         "The coordinator asks each online teammate's local worker for repo-scoped Claude/Codex context, "

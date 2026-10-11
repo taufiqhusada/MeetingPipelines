@@ -1,6 +1,6 @@
-# MeetingPipelines
+# Charlotte
 
-Meeting agent for engineering teams: **Before** (context gathering) → **During** (live transcript) → **After** (summary, task delegation, agent actions).
+**Connects your work.** Meeting agent for engineering teams: **Before** (context gathering) → **During** (live transcript) → **After** (summary, task delegation, agent actions).
 
 - [`meetpipe/`](#before-stage-pre-meeting-context-meetpipe): pre-meeting context brief: coding-agent logs, GitHub, Gmail, Drive → progress, commitments vs. evidence, gaps, action items.
 - [`after/`](after/README.md): post-meeting agent: summary, progress vs. last meeting, human tasks to GitHub/Slack, agent tasks (calendar, report, Darwin search) with approval.
