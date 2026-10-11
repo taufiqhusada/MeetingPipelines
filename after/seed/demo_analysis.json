@@ -1,0 +1,189 @@
+{
+  "summary": "The team reviewed last week's goals: GitHub commit collection is done, Slack posting works but DMs are blocked on admin approval, and transcript ingestion works for pasted text. The team chose Claude for every agent and Recall.ai meeting captions for live transcripts. The demo script has no owner yet, and transcript retention is still open.",
+  "decisions": [
+    {
+      "decision": "Use Claude as the LLM for every agent",
+      "rationale": "Best structured extraction in team tests; one provider is simpler."
+    },
+    {
+      "decision": "Get live transcripts from Recall.ai using free meeting captions",
+      "rationale": "Ready-made bot for Zoom/Meet/Teams with speaker labels."
+    }
+  ],
+  "open_questions": [
+    "Should transcripts be kept after processing or deleted for privacy?",
+    "Who owns the demo script for judging?"
+  ],
+  "goal_progress": [
+    {
+      "goal": "Before agent pulls GitHub commits for each engineer",
+      "owner": "alex",
+      "status": "achieved",
+      "evidence": "Commits are pulled for every engineer; PRs and reviews are not in yet."
+    },
+    {
+      "goal": "Slack bot can post to the team channel and DM engineers",
+      "owner": "priya",
+      "status": "partial",
+      "evidence": "Channel posting works; DMs are blocked on the im:write admin approval."
+    },
+    {
+      "goal": "Transcript ingestion prototype for the After agent",
+      "owner": "jordan",
+      "status": "partial",
+      "evidence": "Pasted text and JSON work; no live meetings because Recall isn't integrated."
+    },
+    {
+      "goal": "Pick the LLM provider for all agents",
+      "owner": "sam",
+      "status": "achieved",
+      "evidence": "Decided in this meeting: Claude for every agent."
+    }
+  ],
+  "person_updates": [
+    {
+      "person": "alex",
+      "done": [
+        "GitHub commit collection in the Before agent"
+      ],
+      "next": [
+        "Add PRs and review comments to the Before agent"
+      ],
+      "blockers": []
+    },
+    {
+      "person": "priya",
+      "done": [
+        "Slack channel posting"
+      ],
+      "next": [
+        "Get admin approval for the Slack DM scope"
+      ],
+      "blockers": [
+        "Workspace admin approval for im:write"
+      ]
+    },
+    {
+      "person": "jordan",
+      "done": [
+        "Transcript ingestion for pasted text and JSON"
+      ],
+      "next": [
+        "Integrate the Recall.ai bot"
+      ],
+      "blockers": []
+    },
+    {
+      "person": "sam",
+      "done": [
+        "LLM provider decision"
+      ],
+      "next": [
+        "Decide transcript retention policy",
+        "Find an owner for the demo script"
+      ],
+      "blockers": []
+    }
+  ],
+  "human_tasks": [
+    {
+      "title": "Integrate Recall.ai bot for live meeting transcripts",
+      "owner": "jordan",
+      "project_role": "ML / Agents Engineer (After agent)",
+      "due_date": "2026-10-14",
+      "status": "todo",
+      "channel": "github",
+      "source_quote": "I'll integrate the Recall bot by Wednesday."
+    },
+    {
+      "title": "Add PRs and review comments to the Before agent",
+      "owner": "alex",
+      "project_role": "Backend Engineer (Before agent)",
+      "due_date": "2026-10-16",
+      "status": "todo",
+      "channel": "github",
+      "source_quote": "I'll add PRs and review comments to the Before agent, should be done Friday."
+    },
+    {
+      "title": "Get Slack workspace admin approval for the DM (im:write) scope",
+      "owner": "priya",
+      "project_role": "Integrations Engineer (Slack)",
+      "due_date": null,
+      "status": "blocked",
+      "channel": "slack",
+      "source_quote": "I'll chase the Slack admin to approve the DM scope."
+    },
+    {
+      "title": "Write the demo script for judging",
+      "owner": null,
+      "project_role": null,
+      "due_date": null,
+      "status": "todo",
+      "channel": "slack",
+      "source_quote": "We also need someone to write the demo script for judging. Let's figure out who later."
+    },
+    {
+      "title": "Decide whether to keep or delete transcripts after processing",
+      "owner": "sam",
+      "project_role": "Tech Lead / PM",
+      "due_date": null,
+      "status": "todo",
+      "channel": "slack",
+      "source_quote": "Open question: do we keep transcripts after processing, or delete them for privacy?"
+    }
+  ],
+  "agent_tasks": [
+    {
+      "title": "Schedule next weekly sync",
+      "kind": "schedule_meeting",
+      "details": "30-minute sync with the whole team.",
+      "requested_by": "sam",
+      "source_quote": "please schedule our next sync Thursday at 3pm for 30 minutes with everyone.",
+      "start_datetime": "2026-10-15T15:00:00",
+      "duration_minutes": 30,
+      "attendees": [
+        "sam",
+        "alex",
+        "priya",
+        "jordan"
+      ],
+      "agenda": [
+        "Review Recall integration",
+        "Before agent PR data",
+        "Slack DM approval status",
+        "Transcript retention decision"
+      ],
+      "capability_query": "create a calendar meeting with attendees and send invites"
+    },
+    {
+      "title": "One-page visual meeting report for sponsors",
+      "kind": "meeting_report",
+      "details": "Shareable visual summary of decisions, progress and tasks.",
+      "requested_by": "sam",
+      "source_quote": "generate a one-page visual report of this meeting so we can share it with the sponsors.",
+      "start_datetime": null,
+      "duration_minutes": null,
+      "attendees": [],
+      "agenda": [],
+      "capability_query": "generate a visual report or slides from meeting notes"
+    },
+    {
+      "title": "Find a way to order pizza for demo night",
+      "kind": "other",
+      "details": "Food delivery for the team on demo night. Requires Sam's approval before ordering.",
+      "requested_by": "priya",
+      "source_quote": "we need pizza for demo night, can the agent find a way to order it?",
+      "start_datetime": null,
+      "duration_minutes": null,
+      "attendees": [],
+      "agenda": [],
+      "capability_query": "order pizza"
+    }
+  ],
+  "next_meeting_goals": [
+    "Recall.ai bot produces live transcripts",
+    "Before agent includes PRs and review comments",
+    "Slack DMs approved and working",
+    "Transcript retention decided"
+  ]
+}

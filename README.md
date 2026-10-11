@@ -1,5 +1,12 @@
 # MeetingPipelines
 
+Meeting agent for engineering teams: **Before** (context gathering) → **During** (live transcript) → **After** (summary, task delegation, agent actions).
+
+- [`meetpipe/`](#before-stage-pre-meeting-context-meetpipe): pre-meeting context brief: coding-agent logs, GitHub, Gmail, Drive → progress, commitments vs. evidence, gaps, action items.
+- [`after/`](after/README.md): post-meeting agent: summary, progress vs. last meeting, human tasks to GitHub/Slack, agent tasks (calendar, report, Darwin search) with approval.
+
+## Before stage: pre-meeting context (`meetpipe`)
+
 Pre-meeting context, gathered for you. One command pulls what the team has actually been doing
 (Claude Code + Codex sessions, GitHub PRs/issues/commits, Drive docs, meeting transcripts from Gmail)
 and has a local coding agent (Claude Code or Codex) write a brief: **progress, commitments vs. evidence,

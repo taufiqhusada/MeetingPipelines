@@ -1,0 +1,27 @@
+{
+  "meeting_id": "sync-2026-10-11",
+  "title": "Meeting Agent weekly sync",
+  "date": "2026-10-11",
+  "attendees": ["sam", "alex", "priya", "jordan"],
+  "source": "demo",
+  "lines": [
+    {"speaker": "Sam", "t": 0, "text": "Okay let's start. Quick check on last week's goals, then decisions. Alex, GitHub commits?"},
+    {"speaker": "Alex", "t": 9, "text": "Commits are done. The Before agent pulls every engineer's commits from the REST API. PRs and review comments aren't in yet."},
+    {"speaker": "Sam", "t": 21, "text": "Nice. Priya, Slack bot?"},
+    {"speaker": "Priya", "t": 25, "text": "Posting to the channel works. DMs are blocked, we need workspace admin approval for the im:write scope."},
+    {"speaker": "Sam", "t": 36, "text": "Jordan, transcripts?"},
+    {"speaker": "Jordan", "t": 39, "text": "Ingestion works with pasted text and JSON. I haven't touched Recall yet, so no live meetings."},
+    {"speaker": "Sam", "t": 50, "text": "And I owed you the LLM decision. Let's decide now. I'm proposing Claude for all agents, it's the best at structured extraction in our tests."},
+    {"speaker": "Alex", "t": 61, "text": "Agreed, I'd rather have one provider."},
+    {"speaker": "Sam", "t": 65, "text": "Decision: Claude for every agent. Second decision, transcripts come from Recall.ai using the free meeting captions."},
+    {"speaker": "Jordan", "t": 75, "text": "Works for me. I'll integrate the Recall bot by Wednesday."},
+    {"speaker": "Alex", "t": 82, "text": "I'll add PRs and review comments to the Before agent, should be done Friday."},
+    {"speaker": "Priya", "t": 90, "text": "I'll chase the Slack admin to approve the DM scope."},
+    {"speaker": "Sam", "t": 96, "text": "We also need someone to write the demo script for judging. Let's figure out who later."},
+    {"speaker": "Sam", "t": 104, "text": "Open question: do we keep transcripts after processing, or delete them for privacy? Let's think about it."},
+    {"speaker": "Sam", "t": 112, "text": "Meeting agent, please schedule our next sync Thursday at 3pm for 30 minutes with everyone."},
+    {"speaker": "Sam", "t": 119, "text": "And generate a one-page visual report of this meeting so we can share it with the sponsors."},
+    {"speaker": "Priya", "t": 126, "text": "Also we need pizza for demo night, can the agent find a way to order it?"},
+    {"speaker": "Sam", "t": 132, "text": "Sure, but nothing gets ordered without my approval. Okay, thanks everyone."}
+  ]
+}

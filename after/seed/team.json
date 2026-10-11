@@ -1,0 +1,6 @@
+[
+  {"handle": "sam", "name": "Sam Okafor", "role": "Tech Lead / PM", "email": "sam@example.com", "slack_user_id": null, "github": "sam-okafor-demo"},
+  {"handle": "alex", "name": "Alex Rivera", "role": "Backend Engineer (Before agent)", "email": "alex@example.com", "slack_user_id": null, "github": "alex-rivera-demo"},
+  {"handle": "priya", "name": "Priya Nair", "role": "Integrations Engineer (Slack)", "email": "priya@example.com", "slack_user_id": null, "github": "priya-nair-demo"},
+  {"handle": "jordan", "name": "Jordan Lee", "role": "ML / Agents Engineer (After agent)", "email": "jordan@example.com", "slack_user_id": null, "github": "jordan-lee-demo"}
+]

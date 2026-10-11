@@ -6,3 +6,6 @@ token.json
 .venv/
 __pycache__/
 *.pyc
+after/data/
+after/output/
+.DS_Store
