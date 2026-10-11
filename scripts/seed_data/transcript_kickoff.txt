@@ -1,0 +1,21 @@
+MeetingPipelines kickoff — Transcript
+Oct 6, 2026 · 30 min · Attendees: Taufiq, Michael, George
+
+Taufiq: Okay, let's kick off. The idea is a pipeline that does the context gathering before a meeting so nobody has to dig through PRs and docs themselves.
+Michael: And after the meeting too, right? Turning the transcript into action items.
+Taufiq: Eventually, yes. But for this week I want to focus only on the before part, the context gathering, backend only. Slack comes later.
+George: What are the sources?
+Taufiq: Four. Our coding agent logs, so Claude Code and Codex sessions — that's the real record of what we built. GitHub PRs and issues. Design docs and specs in Drive. And previous meeting transcripts, mostly from Gmail, like Meet transcripts or Gemini notes.
+Michael: Do we need a database for retrieval?
+Taufiq: I don't think so. It's a one-shot run before the meeting. Gather, trim, summarize with one LLM call. Plain files.
+George: Okay. Who does what?
+Taufiq: I'll build the connectors — Claude Code, Codex, GitHub, Gmail and Drive — by Friday the 10th. End to end on real data.
+Michael: I'll own the Slack wrapper: posting the brief into a channel. I can have a first version by Monday the 13th.
+George: I'll write the spec for the after-meeting pipeline, transcript to GitHub issues, and put it in Drive by Wednesday the 8th.
+Taufiq: Also, we must redact secrets. Coding logs have API keys in them.
+Michael: Agreed. One more thing — the setup has to be easy for everyone. Nobody should paste tokens.
+Taufiq: Good point. I'll look into a consent flow, like click to connect.
+George: Open question: when we aggregate everyone's briefs, where do they meet? Slack or a shared folder?
+Taufiq: Let's decide that at the design review on Thursday.
+Michael: And I'll open GitHub issues for the remaining pieces so we can track them.
+Taufiq: Great, thanks everyone.
