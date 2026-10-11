@@ -131,7 +131,8 @@ def cmd_coordinator(args) -> int:
 
 def cmd_worker(args) -> int:
     from .worker import serve
-    serve(path=args.path, llm_name=args.llm, poll_wait=args.wait)
+    from .worker import worker_sources
+    serve(path=args.path, llm_name=args.llm, poll_wait=args.wait, sources=worker_sources(args.sources))
     return 0
 
 
@@ -233,6 +234,8 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--llm", default=settings.llm, choices=["claude", "codex"])
     w.add_argument("--wait", type=int, default=int(os.getenv("MEETPIPE_WORKER_LONGPOLL_SECONDS", "285")),
                    help="long-poll duration in seconds (10–300; default 285)")
+    w.add_argument("--sources", default=None,
+                   help="comma list (default $MEETPIPE_WORKER_SOURCES or claude_code,codex,gmail,drive,fireflies)")
     w.set_defaults(fn=cmd_worker)
 
     ff = sub.add_parser("fireflies-export", help="latest Fireflies meeting → After stage Transcript JSON")
