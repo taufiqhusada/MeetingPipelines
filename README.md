@@ -1,6 +1,6 @@
-# MeetingPipelines
+# Charlotte
 
-Meeting agent for engineering teams: **Before** (context gathering) → **During** (live transcript) → **After** (summary, task delegation, agent actions).
+**Connects your work.** Meeting agent for engineering teams: **Before** (context gathering) → **During** (live transcript) → **After** (summary, task delegation, agent actions).
 
 - [`meetpipe/`](#before-stage-pre-meeting-context-meetpipe): pre-meeting context brief: coding-agent logs, GitHub, Gmail, Drive → progress, commitments vs. evidence, gaps, action items.
 - [`after/`](after/README.md): post-meeting agent: summary, progress vs. last meeting, human tasks to GitHub/Slack, agent tasks (calendar, report, Darwin search) with approval.
@@ -54,16 +54,16 @@ or `@agent help`). The pipeline runs on the bot host's laptop and the brief is p
 (+ `brief.md` attached). Only one bot process per Slack app should be running. From the terminal instead:
 `uv run run.py run --post "#channel"`.
 
-### Live dashboard (master)
+### Master dashboard
 
 ```bash
-uv run run.py coordinator --host 0.0.0.0          # job queue for teammates' workers
-uv run run.py dashboard --host 0.0.0.0 --slack    # web UI + "@agent generate meeting prep" listener
+uv run run.py coordinator --host 0.0.0.0
+uv run run.py dashboard --host 0.0.0.0 --llm codex --slack
 ```
-Open `http://<master-ip>:8770`: a 3D context graph that grows live as each laptop reports (people → apps →
-items, with a phase ticker), the per-person brief, and a task tracker (After stage tasks, drag to change status).
-Slack mentions and the **Generate prep** button start the same run; Slack gets the brief plus a link to the graph.
-`--slack` replaces `slack-bot` (only one listener per Slack app). Try it without workers: `uv run run.py dashboard --demo`.
+
+The dashboard supports **Run live**, **Reset**, and **Replay**. A reset immediately clears the master UI and
+allows another run; it cannot recall work already sent to teammates' local workers. Every dashboard event stream
+is saved under `runs/dashboard/`, so a completed run can be replayed after the dashboard restarts.
 
 ### Merge several briefs (team view)
 

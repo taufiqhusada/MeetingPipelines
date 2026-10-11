@@ -3,187 +3,233 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Meeting Pipelines</title>
+<title>Charlotte</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.3/dist/3d-force-graph.min.js"></script>
 <style>
+/* Design tokens: one accent, neutral greys, two radii, 4px spacing scale. */
 :root{
-  --bg:#f6f8fc; --paper-2:#eaf0fa; --panel:rgba(255,255,255,.78); --panel-solid:#ffffff; --line:#dfe5ef; --line-2:#c9d3e4;
-  --ink:#141a26; --ink-2:#4a5468; --mute:#8a93a6; --blue:#2f6bff; --cyan:#2f6bff; --blue-soft:#e3ecff; --term:#141821;
-  --ok:#1f9d63; --warn:#c98a12; --err:#d9473b;
-  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace; --sans:Inter,-apple-system,system-ui,sans-serif;
+  --bg:#f7f8fa; --surface:#ffffff; --sunken:#f1f3f6; --line:#e4e7ec; --line-strong:#d0d5dd;
+  --ink:#15171c; --ink-2:#475467; --mute:#8a94a6;
+  --accent:#2457e6; --accent-soft:#e8eefc;
+  --ok:#14915a; --ok-soft:#e5f4ec; --err:#d0342c; --err-soft:#fbe9e7; --idle:#a0a8b6;
+  --r-sm:6px; --r-md:10px;
+  --sans:Inter,-apple-system,system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);overflow:hidden}
-body::before{content:"";position:fixed;inset:-20%;pointer-events:none;z-index:0;
-  background:radial-gradient(42% 40% at 20% 24%,rgba(80,140,255,.30),transparent 70%),
-             radial-gradient(40% 36% at 84% 84%,rgba(120,175,255,.22),transparent 70%)}
-.caps{font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em;font-size:10.5px;color:var(--mute)}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
 a{color:inherit}
+.label{font-size:12px;font-weight:500;color:var(--mute)}
+.num{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
 
-header{position:relative;z-index:10;display:flex;align-items:center;gap:18px;padding:14px 22px;flex-wrap:wrap}
-.brand{font:500 13px var(--mono);letter-spacing:.08em;display:flex;align-items:center;gap:10px}
-.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px var(--blue-soft)}
-.tabs{display:flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;backdrop-filter:blur(8px)}
-.tabs button{all:unset;cursor:pointer;font:500 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:7px 15px;border-radius:999px;color:var(--ink-2)}
-.tabs button.on{background:var(--ink);color:#fff}
-.controls{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.controls select,.controls input{font:13px var(--sans);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 13px;color:var(--ink);outline:none}
-.controls input{width:220px}.controls input::placeholder{color:var(--mute)}
-.btn{all:unset;cursor:pointer;background:var(--ink);color:#fff;font:500 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:10px 17px;border-radius:999px}
-.btn:hover{background:#000}.btn[disabled]{opacity:.4;cursor:default}
-.btn.ghost{background:transparent;border:1px solid var(--line-2);color:var(--ink-2)}
-.status{font:500 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:7px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--ink-2);display:flex;gap:8px;align-items:center}
-.status i{width:7px;height:7px;border-radius:50%;background:var(--mute)}
-.status.running i{background:var(--blue);animation:blink 1s infinite}.status.done i{background:var(--ok)}.status.error i{background:var(--err)}
-@keyframes blink{50%{opacity:.25}}
+/* ---------- header ---------- */
+header{height:64px;display:flex;align-items:center;gap:28px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--line);position:relative;z-index:10}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-art{display:block;width:102px;height:auto;max-height:42px;object-fit:contain}
+.brand-copy{display:grid;gap:0;line-height:1.2}
+.brand b{font-weight:650;font-size:16px;letter-spacing:-.02em}
+.brand .tagline{color:var(--mute);font-size:12px}
+.brand .demo{font-size:11px;font-weight:500;color:var(--ink-2);background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 6px;display:none}
+.tabs{display:flex;gap:20px;height:100%}
+.tabs button{all:unset;cursor:pointer;height:100%;display:flex;align-items:center;font-size:14px;font-weight:500;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button:hover{color:var(--ink)}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+.controls{margin-left:auto;display:flex;align-items:center;gap:8px}
+.field{height:34px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);padding:0 10px;font:14px var(--sans);color:var(--ink);outline:none}
+.field:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+#meeting{width:220px}
+#history{max-width:190px}
+.primary{all:unset;cursor:pointer;height:34px;padding:0 14px;border-radius:var(--r-sm);background:var(--ink);color:#fff;font-size:14px;font-weight:500;display:inline-flex;align-items:center}
+.primary:hover{background:#000}.primary[disabled]{background:var(--line-strong);cursor:default}
+.secondary{all:unset;cursor:pointer;height:30px;padding:0 12px;border-radius:var(--r-sm);border:1px solid var(--line-strong);background:var(--surface);font-size:13px;font-weight:500;display:inline-flex;align-items:center}
+.secondary:hover{background:var(--sunken)}
 
-main{position:relative;z-index:1;height:calc(100% - 66px)}
+main{position:absolute;top:64px;left:0;right:0;bottom:0}
 .view{position:absolute;inset:0;display:none}.view.on{display:block}
 
+/* ---------- graph view ---------- */
+#v-context.on{display:grid;grid-template-columns:1fr 340px}
+.stage{position:relative;overflow:hidden}
+#v-context.on.collapsed{grid-template-columns:1fr 0}
+#v-context.collapsed #side{width:0;overflow:hidden;border-left:0}
+.side-toggle{position:absolute;z-index:3;right:12px;top:12px;all:unset;cursor:pointer;padding:5px 8px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:rgba(255,255,255,.92);font-size:12px;font-weight:500;box-shadow:0 2px 8px rgba(16,24,40,.06)}
+.side-toggle:hover{background:var(--sunken)}
 #graph{position:absolute;inset:0}
 .scene-tooltip:empty{display:none!important}
-.scene-tooltip{font:12px var(--sans)!important;background:#fff!important;border:1px solid var(--line-2);border-radius:10px;padding:7px 10px!important;color:var(--ink)!important;max-width:320px;box-shadow:0 10px 30px -18px rgba(20,30,60,.4)}
-.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--ink-2);pointer-events:none;z-index:2}
-.empty h2{font:500 24px var(--sans);color:var(--ink);margin:0 0 8px}
-.hint{position:absolute;left:22px;bottom:16px;z-index:3;display:flex;gap:16px;align-items:center;font:10.5px var(--mono);color:var(--mute);text-transform:uppercase;letter-spacing:.08em}
-.hint span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:-1px;background:var(--c)}
-#now{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:10px;
-  background:#141821;color:#e6e9f0;font:500 13px var(--mono);padding:9px 16px 9px 12px;border-radius:999px;box-shadow:0 14px 30px -16px rgba(10,20,40,.6);white-space:nowrap}
-#now.on{display:flex}#now .ic{width:26px;height:26px;border-radius:50%;background:#262e3f;display:grid;place-items:center}
-#now .who{color:#8e96a8;text-transform:uppercase;letter-spacing:.08em;font-size:11px}#now .n{color:#7fa8ff}
-#now .spin{width:12px;height:12px;border-radius:50%;border:2px solid #3a4560;border-top-color:#7fa8ff;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-#floats{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
-.fl{position:absolute;transform:translate(10px,-50%);background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 11px 4px 5px;
-  font:500 10.5px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink);white-space:nowrap;display:flex;gap:7px;align-items:center;
-  box-shadow:0 8px 18px -12px rgba(20,30,60,.5);animation:flin .35s ease-out;transition:opacity .6s}
-.fl .ic{width:18px;height:18px;border-radius:50%;background:#141821;display:grid;place-items:center}.fl .ic svg{width:11px;height:11px}
-.fl .k{color:var(--mute)}
-@keyframes flin{from{opacity:0;transform:translate(0,-50%) scale(.9)}}
-.progress{position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:3;display:flex;gap:6px;align-items:center}
-.progress .step{font:500 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
-.progress .step.on{color:#fff;background:var(--blue);border-color:var(--blue)}
-.progress .step.done{color:var(--ok);border-color:#bfe3cf}
-.progress .sep{width:16px;height:1px;background:var(--line-2)}
+.scene-tooltip{font:13px var(--sans)!important;background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line);border-radius:var(--r-sm);padding:6px 9px!important;max-width:320px;box-shadow:0 4px 16px rgba(16,24,40,.08)}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--ink-2);pointer-events:none}
+.empty h2{font-size:18px;font-weight:600;color:var(--ink);margin:0 0 6px}
+.legend{position:absolute;left:20px;bottom:16px;display:flex;gap:16px;font-size:12px;color:var(--mute)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:0}
+#floats{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.fl{position:absolute;transform:translate(10px,-50%);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 8px 4px 6px;
+  font-size:12px;color:var(--ink);white-space:nowrap;display:flex;gap:6px;align-items:center;box-shadow:0 4px 12px rgba(16,24,40,.08);animation:fadein .3s ease-out;transition:opacity .6s}
+.fl .src{color:var(--mute)}
+@keyframes fadein{from{opacity:0;transform:translate(4px,-50%)}}
 
-#side{position:absolute;top:44px;right:16px;bottom:16px;width:330px;overflow:auto;display:flex;flex-direction:column;gap:10px;z-index:3;padding-right:2px}
-#side::-webkit-scrollbar,#drawer::-webkit-scrollbar{width:6px}#side::-webkit-scrollbar-thumb,#drawer::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:9px}
-.term{background:var(--term);border-radius:14px;padding:11px 13px;font:11.5px/1.6 var(--mono);color:#e6e9f0;cursor:pointer;box-shadow:0 14px 30px -18px rgba(10,20,40,.6);transition:transform .15s}
-.term:hover{transform:translateY(-1px)}.term.sel{outline:2px solid var(--blue)}
-.term .hd{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#8e96a8;border-bottom:1px solid #2a2f3b;padding-bottom:7px;margin-bottom:7px}
-.term .hd .av{width:22px;height:22px;font-size:10px}
-.term .hd b{color:#fff;font-weight:500}
-.term .st{margin-left:auto;font-size:9.5px;padding:2px 8px;border-radius:999px;background:#232836}
-.st.running,.st.gathering,.st.summarizing,.st.merging,.st.queued{color:#7fa8ff}.st.complete,.st.done{color:#6fd3a0}.st.failed,.st.timed_out,.st.error{color:#ff8a7e}
-.term .ln{flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#b9c0cf}
-.term .ln .p{color:#6b7385}.term .ln .n{color:#7fa8ff}
-.term .ln.new{animation:in .35s ease-out}
-.term .body{max-height:132px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
-@keyframes in{from{opacity:0;transform:translateY(4px)}}
-
-#drawer{position:absolute;left:18px;top:44px;width:370px;max-height:calc(100% - 90px);overflow:auto;z-index:4;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);
-  border:1px solid var(--line);border-radius:18px;padding:16px 18px;box-shadow:0 24px 50px -28px rgba(20,30,60,.45);display:none}
-#drawer.on{display:block;animation:in .2s}
-#drawer .x{float:right;cursor:pointer;color:var(--mute);font-size:16px;line-height:1}
+/* node details */
+#drawer{position:absolute;left:16px;top:16px;width:360px;max-height:calc(100% - 64px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);
+  box-shadow:0 8px 24px rgba(16,24,40,.08);display:none}
+#drawer.on{display:block;animation:fadein .15s}
+#drawer .head{padding:14px 16px 10px;border-bottom:1px solid var(--line);position:relative}
+#drawer .head h3{margin:2px 0 0;font-size:16px;font-weight:600;line-height:1.35;padding-right:20px}
+#drawer .head .meta{color:var(--ink-2);font-size:13px;margin-top:4px}
+#drawer .x{position:absolute;right:12px;top:12px;cursor:pointer;color:var(--mute);border:0;background:none;font-size:16px;line-height:1}
 #drawer .x:hover{color:var(--ink)}
-#drawer h3{margin:6px 0 4px;font:600 17px/1.3 var(--sans)}
-#drawer .sub{color:var(--ink-2);font-size:12.5px;margin-bottom:10px}
-#drawer .row{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px dashed var(--line);font-size:13px}
-#drawer .row .ic{width:24px;height:24px;flex:none;border-radius:8px;display:grid;place-items:center;background:var(--term)}
-#drawer .row a{text-decoration:none}#drawer .row a:hover{color:var(--blue)}
-#drawer .sec{margin-top:12px}
-#drawer .tag{font:500 9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:var(--paper-2);color:var(--ink-2);white-space:nowrap}
-#drawer .tag.cited{background:var(--blue-soft);color:var(--blue)}
-#drawer .link{cursor:pointer}#drawer .link:hover{color:var(--blue)}
-.icon{width:16px;height:16px;display:block}
+#drawer .sec{padding:10px 16px 12px;border-bottom:1px solid var(--line)}#drawer .sec:last-child{border-bottom:0}
+#drawer .sec .label{margin-bottom:4px}
+#drawer .row{display:flex;gap:10px;align-items:flex-start;padding:6px 0;font-size:13px;line-height:1.45}
+#drawer .row.link{cursor:pointer;border-radius:var(--r-sm);margin:0 -6px;padding:6px}
+#drawer .row.link:hover{background:var(--sunken)}
+#drawer .row .ic{flex:none;margin-top:1px}
+#drawer .tag{margin-left:auto;font-size:12px;color:var(--mute);white-space:nowrap}
+#drawer .tag.cited{color:var(--accent)}
+#drawer a.out{color:var(--accent);text-decoration:none;font-size:13px}
+.icon{display:block}
 
-#brief,#tasks{height:100%;overflow:auto;padding:6px 22px 40px}
-.wrap{max-width:1200px;margin:0 auto}
-.goal{background:var(--ink);color:#fff;border-radius:22px;padding:26px 30px;margin:8px 0 20px;position:relative;overflow:hidden}
-.goal .caps{color:#9fb0cf}.goal p{font:500 22px/1.35 var(--sans);margin:8px 0 0;max-width:920px}
-.goal::after{content:"";position:absolute;right:-70px;top:-70px;width:260px;height:260px;border-radius:50%;background:radial-gradient(var(--blue),transparent 65%);opacity:.55}
-.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
-.person{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 18px 10px;transition:transform .15s,box-shadow .15s}
-.person:hover{transform:translateY(-2px);box-shadow:0 18px 40px -26px rgba(20,30,60,.45)}
-.who{display:flex;align-items:center;gap:11px;margin-bottom:6px}
-.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:600 12.5px var(--sans);background:var(--blue-soft);color:#1d4fd1;flex:none}
-.who b{font-size:16px;font-weight:600}.who .btn{margin-left:auto;padding:6px 11px;font-size:10px}
-.bucket{margin:12px 0 2px}.bucket .caps{display:flex;align-items:center;gap:7px}
-.bucket .caps::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}
-.bucket ul{margin:6px 0 0;padding:0;list-style:none}
-.bucket li{padding:7px 0;border-top:1px dashed var(--line);display:flex;gap:10px;align-items:flex-start}
-.chip{font:500 10.5px var(--mono);padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2);background:var(--bg);text-decoration:none;white-space:nowrap;margin-left:auto;cursor:pointer;align-self:center}
-.chip:hover{background:var(--blue-soft);border-color:var(--blue);color:var(--blue)}
-.decide{margin-top:20px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 20px}
-.decide h3,.full h3{margin:0 0 6px;font:600 16px var(--sans)}
-.decide label{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px dashed var(--line);cursor:pointer}
-.decide input{accent-color:var(--blue);margin-top:4px;width:15px;height:15px}
-.decide label.done span{text-decoration:line-through;color:var(--mute)}
-.full{margin-top:16px}.full summary{cursor:pointer;font:500 11.5px var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);padding:10px 0}
-.full .sec{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 18px;margin-bottom:12px}
-.full ul{padding-left:18px}.full li{margin:7px 0}
-.badge{font:500 9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:var(--paper-2);color:var(--ink-2)}
-.badge.done{background:#ddf3e7;color:var(--ok)}.badge.in_progress{background:var(--blue-soft);color:var(--blue)}
-.badge.no_evidence,.badge.high{background:#fbe1de;color:var(--err)}.badge.medium{background:#fbf0d9;color:var(--warn)}
-#tip{position:fixed;pointer-events:none;z-index:50;background:var(--ink);color:#fff;font:12px var(--sans);padding:7px 10px;border-radius:9px;max-width:320px;display:none}
-.note{color:var(--mute);margin:40px auto;text-align:center}
+/* sidebar */
+#side{background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.panel{padding:16px 18px;border-bottom:1px solid var(--line)}
+.run-title{font-size:15px;font-weight:600}
+.run-meta{font-size:13px;color:var(--ink-2);margin-top:2px;display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--idle);flex:none}
+.dot.running{background:var(--accent);animation:pulse 1.2s ease-in-out infinite}.dot.done{background:var(--ok)}.dot.error{background:var(--err)}
+@keyframes pulse{50%{opacity:.35}}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px}
+.steps div{font-size:12px;color:var(--mute)}
+.steps div::before{content:"";display:block;height:3px;border-radius:2px;background:var(--line);margin-bottom:6px}
+.steps .done{color:var(--ink-2)}.steps .done::before{background:var(--ink)}
+.steps .on{color:var(--ink);font-weight:500}.steps .on::before{background:var(--accent)}
+.section-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.people-list{display:flex;flex-direction:column}
+.person-row{display:grid;grid-template-columns:28px 1fr auto;gap:2px 10px;align-items:center;padding:8px;margin:0 -8px;border-radius:var(--r-sm);cursor:pointer}
+.person-row:hover{background:var(--sunken)}.person-row.sel{background:var(--accent-soft)}
+.av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:600;background:var(--sunken);color:var(--ink-2);border:1px solid var(--line)}
+.person-row .nm{font-size:14px;font-weight:500}
+.person-row .st{font-size:12px;color:var(--mute);display:flex;align-items:center;gap:6px}
+.person-row .st.running{color:var(--accent)}.person-row .st.done{color:var(--ok)}.person-row .st.error{color:var(--err)}
+.person-row .srcs{grid-column:2 / 4;display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--ink-2)}
+.person-row .srcs span{display:inline-flex;align-items:center;gap:4px}.person-row .srcs .skip{color:var(--idle)}
+.person-row .srcs .busy{color:var(--accent)}
+.activity{flex:1;min-height:0;overflow:auto;padding:16px 18px}
+.feed{list-style:none;margin:0;padding:0}
+.feed li{display:grid;grid-template-columns:44px 1fr;gap:8px;padding:5px 0;font-size:13px;color:var(--ink-2);animation:fadein .25s ease-out}
+.feed li .t{color:var(--mute)}
+.feed li b{color:var(--ink);font-weight:500}
+.feed li:first-child{color:var(--ink)}
 
-.filters{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 16px}
-.filters button{all:unset;cursor:pointer;font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink-2)}
-.filters button.on{background:var(--ink);border-color:var(--ink);color:#fff}
-.board{display:grid;grid-template-columns:repeat(4,minmax(250px,1fr));gap:14px;align-items:start}
-.col{background:rgba(255,255,255,.55);border:1px solid var(--line);border-radius:18px;padding:12px;min-height:240px;transition:background .15s}
-.col.over{background:var(--blue-soft);border-color:var(--blue)}
-.col h4{margin:2px 4px 12px;display:flex;justify-content:space-between;align-items:center}
-.col h4 .caps::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px;background:var(--c)}
-.col h4 .n{font:500 11px var(--mono);color:var(--mute)}
-.task{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;cursor:grab;transition:box-shadow .15s,transform .15s}
-.task:hover{transform:translateY(-1px);box-shadow:0 12px 26px -20px rgba(20,30,60,.5)}
-.task.ro{cursor:default}
-.task .t{font-weight:500;margin-bottom:9px}
-.task .meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.task .av{width:24px;height:24px;font-size:10px}
-.flag{font:500 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:#fbe1de;color:var(--err)}
-.org{font:500 9.5px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin-left:auto}
+/* ---------- brief ---------- */
+#brief,#tasks{height:100%;overflow:auto}
+.doc{max-width:1080px;margin:0 auto;padding:36px 32px 64px}
+.doc .kicker{font-size:13px;font-weight:500;color:var(--mute)}
+.doc h1{font-size:28px;font-weight:600;letter-spacing:-.02em;margin:4px 0 6px}
+.doc .byline{font-size:13px;color:var(--ink-2)}
+.doc .lead{font-size:18px;line-height:1.55;color:var(--ink);max-width:760px;margin:20px 0 32px}
+.doc h2{font-size:15px;font-weight:600;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.decisions{list-style:none;margin:0 0 36px;padding:0;counter-reset:d}
+.decisions li{display:grid;grid-template-columns:22px 18px 1fr;gap:10px;align-items:start;padding:10px 0;border-bottom:1px solid var(--line);counter-increment:d}
+.decisions li::before{content:counter(d);font:500 13px var(--mono);color:var(--mute);padding-top:1px}
+.decisions input{margin-top:3px;accent-color:var(--ink)}
+.decisions li.checked span{color:var(--mute);text-decoration:line-through}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px 28px;margin-bottom:36px}
+.who{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.who b{font-size:15px;font-weight:600}.who .secondary{margin-left:auto;height:26px;font-size:12px;padding:0 9px}
+.bucket{margin-top:12px}
+.bucket .label{margin-bottom:2px}
+.bucket ul{margin:0;padding-left:16px}
+.bucket li{margin:5px 0;color:var(--ink);line-height:1.5}
+.bucket li::marker{color:var(--line-strong)}
+sup.ref{font:500 10px var(--mono);color:var(--accent);cursor:pointer;margin-left:2px}
+sup.ref a{text-decoration:none}
+.sources{list-style:none;margin:0;padding:0;columns:2;column-gap:28px;font-size:13px}
+.sources li{break-inside:avoid;display:grid;grid-template-columns:26px 1fr;padding:4px 0;color:var(--ink-2)}
+.sources li .n{font-family:var(--mono);color:var(--mute)}
+.sources a{color:var(--ink);text-decoration:none}.sources a:hover{color:var(--accent)}
+details.more{margin-top:28px}
+details.more summary{cursor:pointer;font-size:14px;font-weight:500;color:var(--ink-2);padding:8px 0}
+details.more .blk{margin-top:16px}
+details.more ul{padding-left:18px;margin:6px 0}details.more li{margin:6px 0}
+.status-t{font-size:12px;font-weight:500;padding:1px 6px;border-radius:var(--r-sm);background:var(--sunken);color:var(--ink-2)}
+.status-t.done{background:var(--ok-soft);color:var(--ok)}.status-t.in_progress{background:var(--accent-soft);color:var(--accent)}
+.status-t.no_evidence,.status-t.high{background:var(--err-soft);color:var(--err)}
+.note{color:var(--mute);text-align:center;margin:64px auto}
+#tip{position:fixed;pointer-events:none;z-index:50;background:var(--ink);color:#fff;font-size:12px;padding:6px 9px;border-radius:var(--r-sm);max-width:320px;display:none}
+
+/* ---------- tasks ---------- */
+.tasks-head{display:flex;align-items:center;gap:16px;margin-bottom:20px}
+.tasks-head h1{font-size:22px;margin:0}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--r-sm);overflow:hidden;background:var(--surface)}
+.seg button{all:unset;cursor:pointer;padding:5px 12px;font-size:13px;color:var(--ink-2);border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}.seg button.on{background:var(--ink);color:#fff}
+.board{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:16px;align-items:start}
+.col{min-height:220px;border-radius:var(--r-md);padding:4px;transition:background .15s}
+.col.over{background:var(--accent-soft)}
+.col h3{font-size:13px;font-weight:600;margin:4px 6px 10px;display:flex;gap:8px;align-items:center}
+.col h3 .num{color:var(--mute);font-weight:400}
+.task{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;margin-bottom:8px;cursor:grab}
+.task:hover{border-color:var(--line-strong)}.task.ro{cursor:default}
+.task .t{font-size:14px;font-weight:500;line-height:1.4}
+.task .meta{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:12px;color:var(--ink-2);flex-wrap:wrap}
+.task .meta .av{width:20px;height:20px;font-size:9px}
+.task .warn{color:var(--err)}
+.task .src{margin-left:auto;color:var(--mute)}
 </style>
 </head>
 <body>
 <header>
-  <div class="brand"><span class="dot"></span>MEETING · PIPELINES</div>
+  <div class="brand">
+    <img class="brand-art" src="/assets/charlotte-logo.png" alt="Charlotte mascot">
+    <span class="brand-copy"><b>Charlotte</b><span class="tagline">Connects your work</span></span><span class="demo" id="demo">Demo data</span>
+  </div>
   <nav class="tabs">
-    <button data-v="context" class="on">Context graph</button>
+    <button data-v="context" class="on">Graph</button>
     <button data-v="brief">Brief</button>
     <button data-v="tasks">Tasks</button>
   </nav>
   <div class="controls">
-    <select id="since"><option value="7d">Last 7 days</option><option value="14d" selected>Last 14 days</option><option value="30d">Last 30 days</option></select>
-    <input id="meeting" placeholder="Meeting, e.g. Weekly sync">
-    <button class="btn" id="go">▶ Generate prep</button>
-    <span class="status" id="status"><i></i><span>idle</span></span>
+    <select id="since" class="field"><option value="7d">Last 7 days</option><option value="14d" selected>Last 14 days</option><option value="30d">Last 30 days</option></select>
+    <input id="meeting" class="field" placeholder="Meeting name (optional)">
+    <button class="primary" id="go">Run live</button>
+    <button class="secondary" id="reset">Reset</button>
+    <select id="history" class="field" aria-label="Saved runs"><option value="">Replay a saved run…</option></select>
+    <button class="secondary" id="replay">Replay</button>
   </div>
 </header>
 
 <main>
   <section class="view on" id="v-context">
-    <div id="graph"></div>
-    <div class="empty" id="empty"><div><h2>No run yet</h2>Press <b>Generate prep</b> and watch every laptop's context flow into the team brief.</div></div>
-    <div class="progress" id="progress"></div>
-    <div id="floats"></div>
-    <div id="now"></div>
-    <div id="drawer"></div>
-    <aside id="side"></aside>
-    <div class="hint"><span style="--c:#9aa3b5">waiting</span><span style="--c:#2f6bff">fetching</span><span style="--c:#1f9d63">done</span><span style="--c:#d9473b">failed</span>
-      <span style="--c:transparent;margin-left:8px">drag to orbit · scroll to zoom · click any node</span></div>
+    <div class="stage">
+      <button class="side-toggle" id="side-toggle" aria-expanded="true">Hide sidebar</button>
+      <div id="graph"></div>
+      <div id="floats"></div>
+      <div class="empty" id="empty"><div><h2>No prep yet</h2>Generate a prep to see each teammate's context come together.</div></div>
+      <div id="drawer"></div>
+      <div class="legend"><span><i style="background:var(--idle)"></i>Waiting</span><span><i style="background:var(--accent)"></i>Working</span><span><i style="background:var(--ok)"></i>Done</span><span><i style="background:var(--err)"></i>Failed</span><span>Drag to rotate · scroll to zoom · click a node</span></div>
+    </div>
+    <aside id="side">
+      <div class="panel" id="runpanel">
+        <div class="run-title" id="runtitle">No prep running</div>
+        <div class="run-meta"><span class="dot" id="rundot"></span><span id="runmeta">Idle</span></div>
+        <div class="steps" id="steps"></div>
+      </div>
+      <div class="panel">
+        <div class="section-h"><span class="label">Contributors</span><span class="num" id="contrib-count" style="color:var(--mute)"></span></div>
+        <div class="people-list" id="people"></div>
+      </div>
+      <div class="activity">
+        <div class="section-h"><span class="label">Activity</span></div>
+        <ul class="feed" id="feed"></ul>
+      </div>
+    </aside>
   </section>
-  <section class="view" id="v-brief"><div id="brief"><div class="note">The brief appears here when a run finishes.</div></div></section>
+  <section class="view" id="v-brief"><div id="brief"><div class="note">The brief appears here when a prep finishes.</div></div></section>
   <section class="view" id="v-tasks"><div id="tasks"></div></section>
 </main>
 <div id="tip"></div>
-
 <script>
 /* ======================= icons ======================= */
 // 24×24 stroke icons. Colors are app-recognizable accents on the blue theme.
@@ -202,18 +248,18 @@ const ICON = {
   decision:   {c:"#7fa8ff", p:'<path d="M12 3 21 12l-9 9-9-9z"/><path d="m8.5 12 2.5 2.5 4.5-4.5"/>'},
   item:       {c:"#9cc0ff", p:'<circle cx="12" cy="12" r="5"/>'},
 };
-const svgIcon = (k, size = 16, color) => { const i = ICON[k] || ICON.item;
-  return `<svg class="icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color || i.c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${i.p}</svg>`; };
-const IMG = {};
-function loadIcons(){ return Promise.all(Object.keys(ICON).map(k => new Promise(res => {
-  const im = new Image(); im.onload = () => { IMG[k] = im; res(); }; im.onerror = res;
-  im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgIcon(k, 96).replace('class="icon" ', 'xmlns="http://www.w3.org/2000/svg" ')); }))); }
+const svgIcon = (k, size = 16, color = "#475467") => { const i = ICON[k] || ICON.item;
+  return `<svg class="icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${i.p}</svg>`; };
+const IMG = {}, IMGW = {};
+function loadIcons(){ const one = (k, color, into) => new Promise(res => { const im = new Image(); im.onload = () => { into[k] = im; res(); }; im.onerror = res;
+    im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgIcon(k, 96, color).replace('class="icon" ', 'xmlns="http://www.w3.org/2000/svg" ')); });
+  return Promise.all(Object.keys(ICON).flatMap(k => [one(k, "#15171c", IMG), one(k, "#ffffff", IMGW)])); }
 
 /* ======================= state ======================= */
 const SRC = {claude_code:"Claude Code",codex:"Codex",gmail:"Gmail",drive:"Drive",fireflies:"Fireflies",github:"GitHub",local:"Local files",after:"After records"};
 const KIND = {session:"Session",pr:"Pull request",issue:"Issue",commit:"Commits",meeting:"Meeting",doc:"Doc"};
-let CFG = {people:{}}, RUN = null, after = 0, timer = null;
-const S = {actors:new Map(), sources:new Map(), stage:"idle", lines:new Map()};
+let CFG = {people:{}}, RUN = null, after = 0, timer = null, curTs = 0, activeRunId = null;
+const S = {actors:new Map(), sources:new Map(), stage:"idle", lines:new Map(), feed:[]};
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const name = id => id === "master" ? "Shared sources" : (CFG.people[id] || id.charAt(0).toUpperCase() + id.slice(1));
@@ -230,32 +276,72 @@ function show(v){
 $("#go").onclick = async () => {
   const r = await fetch("/api/runs", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({since:$("#since").value, meeting:$("#meeting").value})});
   const j = await r.json(); if (!r.ok && !j.id) return alert(j.error);
-  resetAll(); G.live = true; attach(j.id); show("context");
+  openRun(j.id); loadHistory();
 };
-function attach(id){ clearInterval(timer); timer = setInterval(() => poll(id), 500); poll(id); }
+$("#reset").onclick = async () => {
+  await fetch("/api/runs/reset", {method:"POST"});
+  activeRunId = null; clearInterval(timer); resetAll(); syncGraph(); loadHistory();
+};
+$("#side-toggle").onclick = () => {
+  const view = $("#v-context"), collapsed = view.classList.toggle("collapsed");
+  $("#side-toggle").textContent = collapsed ? "Show sidebar" : "Hide sidebar";
+  $("#side-toggle").setAttribute("aria-expanded", String(!collapsed));
+  setTimeout(resize, 0);
+};
+$("#replay").onclick = async () => {
+  const id = $("#history").value; if (!id) return;
+  const r = await fetch(`/api/runs/${encodeURIComponent(id)}/replay`, {method:"POST"});
+  const j = await r.json(); if (!r.ok) return alert(j.error);
+  openRun(j.id); loadHistory();
+};
+function openRun(id){ resetAll(); G.live = true; attach(id); show("context"); }
+async function loadHistory(){
+  const r = await fetch("/api/runs"); if (!r.ok) return;
+  const selected = $("#history").value, j = await r.json();
+  $("#history").innerHTML = `<option value="">Replay a saved run…</option>` + j.runs.map(run => {
+    const when = new Date(run.started * 1000).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
+    const label = `${when} · ${run.opts?.meeting || "Pre-meeting brief"} · ${run.mode}`;
+    return `<option value="${esc(run.id)}">${esc(label)}</option>`;
+  }).join("");
+  $("#history").value = selected;
+}
+function attach(id){ activeRunId = id; clearInterval(timer); timer = setInterval(() => poll(id), 500); poll(id); }
 async function poll(id){
   const r = await fetch(`/api/runs/${id}?after=${after}`); if (!r.ok) return;
+  if (id !== activeRunId) return; // Reset or another run won while this request was in flight.
   const run = await r.json(); RUN = run;
   run.events.forEach(apply); after += run.events.length;
-  setStatus(run.status, run.status === "running" ? stageLabel() : run.status === "done" ? "brief ready" : (run.error || run.status));
+  setStatus(run.status, run.status === "running" ? stageLabel() : run.status === "done" ? `Ready · ${new Date(run.started*1000).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})}` : (run.error || run.status));
   $("#go").disabled = run.status === "running";
-  if (run.status !== "running"){ clearInterval(timer); if (run.brief){ S.stage = "done"; renderBrief(run); now("brief", "team brief", "ready · click the center to read it", false); setTimeout(() => $("#now").classList.remove("on"), 6000); }
-    else if (run.status === "error") now("brief", "error", esc(run.error || "run failed"), false); }
+  $("#replay").disabled = run.status === "running";
+  if (run.status !== "running"){ clearInterval(timer); if (run.brief){ S.stage = "done"; renderBrief(run); } }
   syncGraph(); renderSide(); renderProgress();
 }
-function setStatus(cls, text){ $("#status").className = "status " + cls; $("#status").lastElementChild.textContent = text; }
-function stageLabel(){ const n = [...S.actors.values()].filter(a => a.id !== "master" && ["running","gathering","summarizing"].includes(a.status)).length;
-  return S.stage === "merging" ? "merging briefs" : n ? `${n} laptop${n > 1 ? "s" : ""} working` : "gathering"; }
+function setStatus(cls, text){
+  $("#rundot").className = "dot " + cls; $("#runmeta").textContent = text;
+  $("#runtitle").textContent = RUN ? (RUN.opts?.meeting || "Pre-meeting brief") : "No prep running";
+}
+
+function stageLabel(){ const sec = RUN?.started ? Math.round(Date.now()/1000 - RUN.started) : 0, t = `${Math.floor(sec/60)}m ${String(sec % 60).padStart(2, "0")}s`;
+  return `${S.stage === "merging" ? "Merging briefs" : "Running"} · ${t}`; }
 
 /* ======================= events → state ======================= */
 function actor(id){ if (!S.actors.has(id)) S.actors.set(id, {id, status: id === "master" ? "gathering" : "queued", sources: []}); return S.actors.get(id); }
-function line(id, html){ (S.lines.get(id) || S.lines.set(id, []).get(id)).push(html); }
-function now(icon, who, html, busy = true){ $("#now").innerHTML = `${busy ? '<span class="spin"></span>' : ""}<span class="ic">${svgIcon(icon, 15)}</span><span class="who">${esc(who)}</span><span>${html}</span>`; $("#now").classList.add("on"); }
+function line(id, html){
+  html = html.replace(/^<span class="p">[›↳]<\/span>\s*/, "").replace(/<span class="p">↳<\/span>/g, "·").replace(/<span class="n">(.*?)<\/span>/g, "$1");
+  html = html.replace(/\b1 items\b/g, "1 item").replace(/· skipped/g, "· nothing found");
+  const sec = RUN?.started && curTs ? Math.max(0, Math.round(curTs - RUN.started)) : 0;
+  S.feed.unshift({t:`${Math.floor(sec/60)}:${String(sec % 60).padStart(2, "0")}`, who:name(id), html});
+  if (S.feed.length > 80) S.feed.length = 80; S.feedDirty = true;
+}
+
+function now(){}
+
 function apply(e){
-  const a = e.actor || "master";
+  const a = e.actor || "master"; curTs = e.ts || curTs;
   if (e.kind === "job"){ S.stage = "gathering"; actor("master"); e.workers.forEach(w => { actor(w); line(w, `<span class="p">›</span> waiting for job`); });
     line("master", `<span class="p">›</span> asked <span class="n">${e.workers.length}</span> laptops for context`); now("master", "master", `asking <span class="n">${e.workers.length}</span> laptops for context`); return; }
-  if (e.kind === "worker_status"){ actor(a).status = e.status; if (!["running"].includes(e.status)) line(a, `<span class="p">↳</span> ${esc(e.status.replace("_"," "))}`); return; }
+  if (e.kind === "worker_status"){ actor(a).status = e.status; if (["failed","timed_out"].includes(e.status)) line(a, `<span class="p">↳</span> ${esc(e.status.replace("_"," "))}`); return; }
   if (e.kind === "stage"){
     if (a === "team"){ if (e.stage === "error") S.stage = "error"; return; }
     if (a === "master" && e.stage === "merging"){ S.stage = "merging"; actor("master").status = "merging"; line("master", `<span class="p">›</span> merging <span class="n">${e.briefs.length}</span> briefs…`);
@@ -264,7 +350,7 @@ function apply(e){
     const act = actor(a);
     if (["gathering","summarizing"].includes(e.stage)){ act.status = e.stage; line(a, `<span class="p">›</span> ${e.stage}${e.items ? ` <span class="n">${e.items}</span> items` : ""}`);
       if (e.stage === "summarizing") now(a === "master" ? "master" : "person", name(a), `summarizing <span class="n">${e.items || ""}</span> items with ${esc(CFG.llm || "claude")}`); }
-    if (e.stage === "done" && a !== "master") now("person", name(a), `brief sent to master ✓`, false);
+    if (e.stage === "done" && a !== "master") line(a, "sent its summary to the master");
     if (e.stage === "done" && a !== "master") act.status = "complete";
     return;
   }
@@ -282,16 +368,15 @@ function apply(e){
 function resetAll(){
   S.actors.clear(); S.sources.clear(); S.lines.clear(); S.stage = "idle"; after = 0; RUN = null; briefLinked = false; focusSet = null;
   G.nodes.length = 0; G.links.length = 0; G.byId.clear(); selected = null;
-  graph && graph.graphData({nodes:[], links:[]}); $("#side").innerHTML = ""; closeDrawer();
-  $("#brief").innerHTML = `<div class="note">The brief appears here when the run finishes.</div>`;
-  $("#now").classList.remove("on"); $("#floats").innerHTML = "";
+  graph && graph.graphData({nodes:[], links:[]}); S.feed = []; $("#feed").innerHTML = ""; $("#people").innerHTML = ""; closeDrawer();
+  $("#brief").innerHTML = `<div class="note">The brief appears here when the prep finishes.</div>`; $("#floats").innerHTML = "";
 }
 
 /* ======================= 3D graph ======================= */
 let graph = null, selected = null, idle = 0, briefLinked = false, focusSet = null;
 const G = {nodes:[], links:[], byId:new Map()};
-const COLOR = {queued:"#9aa3b5", fetching:"#2f6bff", gathering:"#2f6bff", running:"#2f6bff", summarizing:"#2f6bff", merging:"#2f6bff",
-               ok:"#1f9d63", complete:"#1f9d63", done:"#1f9d63", skipped:"#b8bfcc", error:"#d9473b", failed:"#d9473b", timed_out:"#d9473b"};
+const COLOR = {queued:"#a0a8b6", fetching:"#2457e6", gathering:"#2457e6", running:"#2457e6", summarizing:"#2457e6", merging:"#2457e6",
+               ok:"#14915a", complete:"#14915a", done:"#14915a", skipped:"#c4cad4", error:"#d0342c", failed:"#d0342c", timed_out:"#d0342c"};
 const ACTIVE = s => ["fetching","gathering","running","summarizing","merging"].includes(s);
 
 function texture(draw, w, h){
@@ -306,50 +391,41 @@ function glowTexture(){ return GLOW || (GLOW = texture((x, w, h) => { const g = 
 
 // Nodes are pills that always face the camera: [icon] KIND  LABEL, like the 2D design, with a soft blue halo when active.
 function makeObject(n){
-  // All sprites use sizeAttenuation:false → same on-screen size at any depth (scale is in screen units).
-  const group = new THREE.Group(), st = n.status || "queued", col = COLOR[st] || "#2f6bff", faded = st === "skipped" || st === "queued";
+  // Sprites use sizeAttenuation:false → constant on-screen size at any depth (scale is in screen units).
+  const group = new THREE.Group(), st = n.status || "queued", col = COLOR[st] || "#2457e6", faded = st === "skipped" || st === "queued";
   const sprite = (map, w, h, opacity = 1) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map, transparent:true, depthWrite:false, depthTest:false, sizeAttenuation:false, opacity}));
     sp.scale.set(w, h, 1); group.add(sp); return sp; };
   if (n.type === "center"){
-    const glow = sprite(glowTexture(), .32, .32, .4); glow.material.color.set("#2f6bff");
-    group.userData = {glow, active:ACTIVE(st), base:.32, glowOpacity:.4};
-    sprite(texture((x, w, h) => { x.fillStyle = st === "done" ? "#1f9d63" : "#141a26"; x.beginPath(); x.arc(w/2, h/2, w/2-4, 0, Math.PI*2); x.fill();
-      x.fillStyle = "#fff"; x.textAlign = "center"; x.font = "500 19px 'JetBrains Mono'"; x.fillText("TEAM", w/2, h/2 - 4); x.fillText("BRIEF", w/2, h/2 + 20); }, 128, 128), .085, .085);
-    const cap = (n.sub || "").toUpperCase(), cw = 420, ch = 40;
-    const caption = sprite(texture((x) => { x.font = "500 16px 'JetBrains Mono'"; const tw = x.measureText(cap).width + 30, X = (cw - tw)/2;
-      x.fillStyle = st === "done" ? "#1f9d63" : "#2f6bff"; roundRect(x, X, 6, tw, ch - 12, (ch - 12)/2); x.fill();
-      x.fillStyle = "#fff"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(cap, cw/2, ch/2 + 1); }, cw, ch), .03 * cw/ch, .03);
-    caption.center.set(.5, 2.1);   // sits just below the core on screen
+    const glow = sprite(glowTexture(), .22, .22, .3); glow.material.color.set(st === "done" ? "#14915a" : "#2457e6");
+    group.userData = {glow, active:ACTIVE(st), base:.22, glowOpacity:.3};
+    sprite(texture((x, w, h) => { x.fillStyle = st === "done" ? "#14915a" : "#15171c"; x.beginPath(); x.arc(w/2, h/2, w/2-4, 0, Math.PI*2); x.fill();
+      x.fillStyle = "#fff"; x.textAlign = "center"; x.textBaseline = "middle"; x.font = "600 22px Inter"; x.fillText("Brief", w/2, h/2 + 1); }, 128, 128), .07, .07);
     return group;
   }
-  const glow = sprite(glowTexture(), .1, .1, ACTIVE(st) ? .45 : 0); glow.material.color.set(col);
-  group.userData = {glow, active:ACTIVE(st), base:.1, glowOpacity:glow.material.opacity};
+  const glow = sprite(glowTexture(), .07, .07, ACTIVE(st) ? .35 : 0); glow.material.color.set(col);
+  group.userData = {glow, active:ACTIVE(st), base:.07, glowOpacity:glow.material.opacity};
   const dark = n.type === "hub", key = n.type === "source" ? n.src : n.type === "hub" ? (n.actor === "master" ? "master" : "person") : "decision";
-  if (n.type === "source" && faded && st === "skipped"){   // nothing found: just a faint icon, label on hover
-    sprite(texture((x, w, h) => { x.globalAlpha = .45; x.fillStyle = "#141821"; x.beginPath(); x.arc(w/2, h/2, w/2-2, 0, Math.PI*2); x.fill();
-      if (IMG[key]) x.drawImage(IMG[key], w*.22, h*.22, w*.56, h*.56); }, 48, 48), .018, .018);
+  if (n.type === "source" && st === "skipped"){   // nothing found: a small faint icon; name on hover
+    sprite(texture((x, w, h) => { x.globalAlpha = .4; x.strokeStyle = "#a0a8b6"; x.lineWidth = 2; x.fillStyle = "#fff"; x.beginPath(); x.arc(w/2, h/2, w/2-3, 0, Math.PI*2); x.fill(); x.stroke();
+      if (IMG[key]) x.drawImage(IMG[key], w*.27, h*.27, w*.46, h*.46); }, 48, 48), .016, .016);
     return group;
   }
-  const WORD = {queued:"waiting", gathering:"reading", running:"reading", summarizing:"summarizing", merging:"merging", complete:"done ✓", done:"done ✓", fetching:"reading", failed:"failed", timed_out:"no reply", error:"error"};
-  const kind = (n.type === "decision" ? "decide" : n.type === "hub" ? (WORD[st] || st || "") : st === "ok" ? "" : (WORD[st] || st || "")).toUpperCase();
-  const label = (n.label + (n.type === "source" && n.count != null ? "  " + n.count : "")).toUpperCase();
-  const H = 44, W = 560;
-  let pw = 0;
+  const WORD = {queued:"waiting", gathering:"reading", running:"reading", summarizing:"summarizing", merging:"merging", complete:"done", done:"done", fetching:"reading", failed:"failed", timed_out:"no reply", error:"error"};
+  const label = n.label, after = n.type === "source" ? (st === "ok" ? String(n.count ?? "") : WORD[st] || "") : n.type === "hub" ? (WORD[st] || "") : "";
+  const H = 40, W = 520;
   const tex = texture((x) => {
-    x.font = "500 13px 'JetBrains Mono'"; const kw = kind ? x.measureText(kind).width + 12 : 0;
-    x.font = "500 17px 'JetBrains Mono'"; const lw = Math.min(x.measureText(label).width, 400);
-    pw = 14 + 26 + 10 + kw + lw + 18; const X = (W - pw)/2;
-    x.shadowColor = "rgba(20,30,60,.16)"; x.shadowBlur = 10; x.shadowOffsetY = 2;
-    x.fillStyle = dark ? "#141a26" : "#ffffff"; roundRect(x, X, 6, pw, H - 12, (H - 12)/2); x.fill(); x.shadowColor = "transparent";
-    x.strokeStyle = dark ? "#141a26" : (ACTIVE(st) ? col : "#dfe5ef"); x.lineWidth = ACTIVE(st) ? 2 : 1.2; x.stroke();
-    x.fillStyle = dark ? "#262e3f" : "#141821"; x.beginPath(); x.arc(X + 27, H/2, 13, 0, Math.PI*2); x.fill();
-    if (IMG[key]) x.drawImage(IMG[key], X + 18, H/2 - 9, 18, 18);
-    if (!dark && st !== "queued"){ x.fillStyle = col; x.beginPath(); x.arc(X + 37, H/2 - 9, 4, 0, Math.PI*2); x.fill(); }
-    let tx = X + 50; x.textBaseline = "middle";
-    if (kind){ x.font = "500 13px 'JetBrains Mono'"; x.fillStyle = dark ? "#8e9ab5" : "#8a93a6"; x.fillText(kind, tx, H/2 + 1); tx += kw; }
-    x.font = "500 17px 'JetBrains Mono'"; x.fillStyle = dark ? "#ffffff" : faded ? "#9aa3b5" : "#141a26"; x.fillText(label, tx, H/2 + 1, 400);
+    x.font = "500 16px Inter"; const lw = Math.min(x.measureText(label).width, 360);
+    x.font = "400 14px Inter"; const aw = after ? x.measureText(after).width + 10 : 0;
+    const pw = 10 + 20 + 9 + lw + aw + 14, X = (W - pw)/2, Y = 5, PH = H - 10;
+    x.fillStyle = dark ? "#15171c" : "#ffffff"; roundRect(x, X, Y, pw, PH, 7); x.fill();
+    x.strokeStyle = dark ? "#15171c" : ACTIVE(st) ? "#2457e6" : "#d0d5dd"; x.lineWidth = ACTIVE(st) ? 2 : 1; x.stroke();
+    const icon = dark ? IMGW[key] : IMG[key]; if (icon) x.drawImage(icon, X + 10, H/2 - 9, 18, 18);
+    if (!dark && n.type === "source" && st !== "queued"){ x.fillStyle = col; x.beginPath(); x.arc(X + 27, H/2 - 8, 3.5, 0, Math.PI*2); x.fill(); }
+    x.textBaseline = "middle"; let tx = X + 39;
+    x.font = "500 16px Inter"; x.fillStyle = dark ? "#ffffff" : faded ? "#8a94a6" : "#15171c"; x.fillText(label, tx, H/2 + 1, 360); tx += lw + 10;
+    if (after){ x.font = "400 14px Inter"; x.fillStyle = dark ? (st === "complete" || st === "done" ? "#7fd6a8" : ACTIVE(st) ? "#9db5ff" : "#a0a8b6") : n.type === "source" && st === "ok" ? "#475467" : "#2457e6"; x.fillText(after, tx, H/2 + 1); }
   }, W, H);
-  const h = n.type === "hub" ? .04 : .032;     // pill height ≈ 2.5% of the viewport
+  const h = n.type === "hub" ? .036 : .03;
   group.userData.pill = sprite(tex, h * W/H, h);
   return group;
 }
@@ -358,17 +434,17 @@ function initGraph(){
   graph = ForceGraph3D({controlType:"orbit"})(document.getElementById("graph"))
     .backgroundColor("rgba(0,0,0,0)").showNavInfo(false)
     .nodeId("id").nodeVal(n => n.type === "item" ? (n.cited ? 2 : 1) : 4)
-    .nodeColor(n => n.type === "item" ? (dimmed(n) ? "#d5dbe6" : n.cited ? "#2f6bff" : "#2a3142") : "#fff")
-    .nodeOpacity(.9).nodeResolution(10).nodeRelSize(.75)
+    .nodeColor(n => n.type === "item" ? (dimmed(n) ? "#dde1e7" : n.cited ? "#2457e6" : "#344054") : "#fff")
+    .nodeOpacity(.85).nodeResolution(10).nodeRelSize(.55)
     .nodeThreeObject(n => n.type === "item" ? null : makeObject(n))
-    .nodeLabel(n => n.type === "item" ? `<b>${esc(n.title)}</b><br><span style="color:#8fa0c8">${esc(SRC[n.src] || "")} · ${esc(KIND[n.kind] || n.kind || "item")}${n.cited ? " · cited in brief" : ""}</span>`
+    .nodeLabel(n => n.type === "item" ? `<b>${esc(n.title)}</b><br><span style="color:#8a94a6">${esc(SRC[n.src] || "")} · ${esc(KIND[n.kind] || n.kind || "item")}${n.cited ? " · cited in brief" : ""}</span>`
                      : n.type === "decision" ? esc(n.full) : n.type === "source" && n.status === "skipped" ? `${esc(n.label)} · nothing found` : "")
-    .linkColor(l => dimmed(l.source) && dimmed(l.target) ? "rgba(20,26,38,.05)" : l.type === "evidence" ? (focusSet ? "rgba(47,107,255,.75)" : "rgba(47,107,255,.14)") : ACTIVE(l.state) ? "rgba(47,107,255,.75)" : l.type === "item" ? "rgba(20,26,38,.35)" : l.type === "decision" ? "rgba(47,107,255,.45)" : "rgba(20,26,38,.7)")
+    .linkColor(l => dimmed(l.source) && dimmed(l.target) ? "rgba(20,26,38,.05)" : l.type === "evidence" ? (focusSet ? "rgba(36,87,230,.75)" : "rgba(36,87,230,.14)") : ACTIVE(l.state) ? "rgba(36,87,230,.75)" : l.type === "item" ? "rgba(20,26,38,.35)" : l.type === "decision" ? "rgba(36,87,230,.45)" : "rgba(20,26,38,.7)")
     .linkWidth(l => l.type === "hub" ? .6 : l.type === "evidence" ? .3 : l.type === "source" ? .35 : 0)
     .linkCurvature(l => l.type === "evidence" ? .25 : 0).linkOpacity(.85)
     .linkDirectionalParticles(l => ACTIVE(l.state) ? (l.type === "hub" ? 5 : 3) : 0)
     .linkDirectionalParticleWidth(l => l.type === "hub" ? 2.6 : 2).linkDirectionalParticleSpeed(l => l.type === "hub" ? .018 : .025)
-    .linkDirectionalParticleColor(() => "#2f6bff")
+    .linkDirectionalParticleColor(() => "#2457e6")
     .onNodeClick(n => select(n)).onBackgroundClick(() => select(null))
     .onNodeHover(n => { document.getElementById("graph").style.cursor = n ? "pointer" : "grab"; });
   graph.d3Force("charge", null); graph.d3Force("link", null); graph.d3Force("center", null);
@@ -381,16 +457,16 @@ function initGraph(){
   const seg = []; P.forEach((a, i) => { P.map((b, j) => [j, (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2]).sort((u, v) => u[1] - v[1]).slice(1, 4)
     .forEach(([j]) => { if (j > i) seg.push(...a, ...P[j]); }); });
   const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.Float32BufferAttribute(seg, 3));
-  scene.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({color:0x141a26, transparent:true, opacity:.1, depthWrite:false})));
+  scene.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({color:0x15171c, transparent:true, opacity:.07, depthWrite:false})));
   const pg = new THREE.BufferGeometry(); pg.setAttribute("position", new THREE.Float32BufferAttribute(P.flat(), 3));
-  scene.add(new THREE.Points(pg, new THREE.PointsMaterial({color:0x141a26, size:1.1, transparent:true, opacity:.45, sizeAttenuation:true, depthWrite:false})));
+  scene.add(new THREE.Points(pg, new THREE.PointsMaterial({color:0x15171c, size:1, transparent:true, opacity:.3, sizeAttenuation:true, depthWrite:false})));
   const ctl = graph.controls(); ctl.autoRotate = true; ctl.autoRotateSpeed = .55; ctl.enableDamping = true;
   ctl.addEventListener("start", () => { ctl.autoRotate = false; idle = Date.now(); });
   graph.cameraPosition({x:0, y:70, z:190}, {x:0, y:0, z:0});
   // pulse the glow of active nodes; resume orbiting after 12s idle
   (function tick(){ const t = performance.now()/1000;
     G.nodes.forEach(n => { const o = n.__threeObj?.userData; if (o?.active && o.glow && !dimmed(n)){ const w = Math.sin(t*4 + (n.phase || 0));
-      o.glow.material.opacity = .3 + .2*w; o.glow.scale.setScalar(o.base*(1 + .18*w)); } });
+      o.glow.material.opacity = .2 + .15*w; o.glow.scale.setScalar(o.base*(1 + .18*w)); } });
     const cam = graph.camera().position, cd = cam.length();
     G.nodes.forEach(n => { const p = n.__threeObj?.userData?.pill; if (p && !dimmed(n)){ const d = cam.distanceTo(n.__threeObj.position);
       p.material.opacity = Math.max(.28, Math.min(1, 1.25 - (d - cd + 60) / 140)); } });
@@ -480,7 +556,7 @@ function floatLabel(n){
   if (!n || !G.live) return;
   const el = document.createElement("div"); el.className = "fl";
   const t = n.title.length > 42 ? n.title.slice(0, 41) + "…" : n.title;
-  el.innerHTML = `<span class="ic">${svgIcon(n.src, 11)}</span><span class="k">${esc((SRC[n.src] || "").toUpperCase())}</span><span>${esc(t)}</span>`;
+  el.innerHTML = `${svgIcon(n.src, 12)}<span class="src">${esc(SRC[n.src] || "")}</span><span>${esc(t)}</span>`;
   $("#floats").appendChild(el); const f = {el, n, born:performance.now()}; FLOATS.push(f);
   setTimeout(() => { el.style.opacity = 0; setTimeout(() => { el.remove(); FLOATS.splice(FLOATS.indexOf(f), 1); }, 700); }, 3200);
 }
@@ -495,8 +571,8 @@ function linkBrief(b){
   if (briefLinked) return; briefLinked = true;
   const all = JSON.stringify(b); G.nodes.forEach(n => { if (n.type === "item" && all.includes(":" + n.itemId + '"')) n.cited = true; });
   (b.meeting_goals || []).forEach((g, i) => {
-    const id = "dec:" + i, short = g.text.replace(/^(decide|pick|choose|agree)\s+(on\s+|whether\s+|who\s+|if\s+)?/i, m => /who/i.test(m) ? "who " : "").replace(/^./, c => c.toUpperCase());
-    ensureNode({id, type:"decision", label: short.length > 30 ? short.slice(0, 29) + "…" : short, full:g.text, evidence:g.evidence, sub:"decide", status:"done"}, "center");
+    const id = "dec:" + i, short = g.text;
+    ensureNode({id, type:"decision", label: short.length > 44 ? short.slice(0, 43) + "…" : short, full:g.text, evidence:g.evidence, sub:"decide", status:"done"}, "center");
     ensureLink(id, "center", "decision", "ok");
     (g.evidence || []).forEach(ev => { const n = evidenceNode(ev); if (n) ensureLink(id, n.id, "evidence", "ok"); });
   });
@@ -514,7 +590,7 @@ function select(n){
   G.nodes.forEach(m => { const o = m.__threeObj; if (!o) return; o.traverse(c => { if (c.material && c !== o.userData?.glow) c.material.opacity = dimmed(m) ? .12 : 1; });
     if (o.userData?.glow) o.userData.glow.material.opacity = dimmed(m) ? .03 : o.userData.glowOpacity; });
   graph.nodeColor(graph.nodeColor()).linkColor(graph.linkColor());
-  document.querySelectorAll(".term").forEach(t => t.classList.toggle("sel", !!n && t.dataset.id === n.actor));
+  document.querySelectorAll(".person-row").forEach(t => t.classList.toggle("sel", !!n && t.dataset.id === n.actor));
   if (!n){ closeDrawer(); return; }
   graph.controls().autoRotate = false; idle = Date.now();
   const d = n.type === "center" ? 190 : n.type === "item" ? 40 : 70, r = Math.hypot(n.x, n.y, n.z) || 1;
@@ -530,103 +606,118 @@ function citedIn(n){ const b = RUN?.brief; if (!b) return []; const out = [], ne
   (b.people || []).forEach(p => ["progress","wip","next"].forEach(k => (p[k] || []).forEach(i => (i.evidence || []).some(e => e.endsWith(needle)) && out.push([p.name + " · " + k, i.text]))));
   (b.meeting_goals || []).forEach(g => (g.evidence || []).some(e => e.endsWith(needle)) && out.push(["decide", g.text]));
   return out; }
-const BUCKETS = [["progress","Progress so far","#1f9d63"],["wip","Work in progress","#2f6bff"],["next","Next steps","#141a26"]];
+const BUCKETS = [["progress","Done"],["wip","In progress"],["next","Next"]];
 function openDrawer(n){
-  let h = `<span class="x" onclick="select(null)">✕</span>`;
+  const sec = (label, body) => body ? `<div class="sec"><div class="label">${label}</div>${body}</div>` : "";
+  const row = (icon, text, extra = "", onclick = "") => `<div class="row ${onclick ? "link" : ""}" ${onclick ? `onclick="${onclick}"` : ""}><span class="ic">${icon}</span><span>${text}</span>${extra}</div>`;
+  let head = "", body = "";
   if (n.type === "center"){
     const b = RUN?.brief;
-    h += `<div class="caps">Team brief</div><h3>${b ? esc(b.team_goal || b.headline) : "Collecting context…"}</h3>`;
-    h += `<div class="sub">${[...S.actors.values()].filter(a => a.id !== "master").length} laptops · ${G.nodes.filter(x => x.type === "item").length} items gathered</div>`;
-    if (b?.meeting_goals?.length) h += `<div class="sec"><div class="caps">Decide in this meeting</div>${b.meeting_goals.map((g, i) => `<div class="row link" onclick="select(G.byId.get('dec:${i}'))"><span class="ic">${svgIcon("decision", 14)}</span><span>${esc(g.text)}</span></div>`).join("")}</div>`;
-    if (b) h += `<div class="sec"><button class="btn" onclick="show('brief')">Open full brief →</button></div>`;
+    head = `<div class="label">Team brief</div><h3>${b ? esc(b.team_goal || b.headline) : "Collecting context…"}</h3>
+      <div class="meta">${[...S.actors.values()].filter(a => a.id !== "master").length} laptops · ${G.nodes.filter(x => x.type === "item").length} items</div>`;
+    body = sec("Decide in this meeting", (b?.meeting_goals || []).map((g, i) => row(svgIcon("decision", 14), esc(g.text), "", `select(G.byId.get('dec:${i}'))`)).join(""))
+         + (b ? `<div class="sec"><button class="secondary" onclick="show('brief')">Open brief</button></div>` : "");
   } else if (n.type === "hub"){
     const a = S.actors.get(n.actor), pb = personBrief(n.actor);
-    h += `<div class="caps">${n.actor === "master" ? "Master · shared sources" : "Laptop · worker " + esc(n.actor)}</div><h3>${esc(name(n.actor))}</h3><div class="sub">status: ${esc(a.status)}</div>`;
-    if (pb) h += BUCKETS.map(([k, label, c]) => (pb[k] || []).length ? `<div class="sec"><div class="caps" style="color:${c}">${label}</div>${pb[k].map(i => `<div class="row"><span>${esc(i.text)}</span></div>`).join("")}</div>` : "").join("");
-    h += `<div class="sec"><div class="caps">Sources</div>${a.sources.map(s => { const x = S.sources.get(n.actor + "/" + s);
-      return `<div class="row link" onclick="select(G.byId.get('src:${n.actor}/${s}'))"><span class="ic">${svgIcon(s, 14)}</span><span>${SRC[s] || s}</span><span class="tag" style="margin-left:auto">${x.state === "ok" ? x.items + " items" : esc(x.state)}</span></div>`; }).join("")}</div>`;
+    head = `<div class="label">${n.actor === "master" ? "Shared sources on the master" : "Laptop · " + esc(n.actor)}</div><h3>${esc(name(n.actor))}</h3>`;
+    if (pb) body += BUCKETS.map(([k, label]) => sec(label, (pb[k] || []).map(i => row("·", esc(i.text))).join(""))).join("");
+    body += sec("Sources", a.sources.map(s => { const x = S.sources.get(n.actor + "/" + s) || {};
+      return row(svgIcon(s, 14), SRC[s] || s, `<span class="tag">${x.state === "ok" ? x.items + " items" : esc(x.state || "")}</span>`, `select(G.byId.get('src:${n.actor}/${s}'))`); }).join(""));
   } else if (n.type === "source"){
-    const s = S.sources.get(n.actor + "/" + n.src);
-    h += `<div class="caps">${esc(name(n.actor))} · source</div><h3 style="display:flex;gap:10px;align-items:center">${svgIcon(n.src, 20)}${esc(n.label)}</h3>
-      <div class="sub">${s.state === "ok" ? `${s.items} items found` : esc(s.reason || s.state)}</div>`;
-    h += (s.titles || []).map(it => { const node = G.byId.get(`item:${n.actor}:${it.id}`);
-      return `<div class="row link" onclick="select(G.byId.get('item:${n.actor}:${esc(it.id)}'))"><span class="ic">${svgIcon("item", 12, node?.cited ? "#7fa8ff" : "#c9d0dc")}</span><span>${esc(it.title)}</span>${node?.cited ? `<span class="tag cited" style="margin-left:auto">cited</span>` : ""}</div>`; }).join("");
+    const s = S.sources.get(n.actor + "/" + n.src) || {};
+    head = `<div class="label">${esc(name(n.actor))}</div><h3 style="display:flex;gap:8px;align-items:center">${svgIcon(n.src, 18, "#15171c")}${esc(n.label)}</h3>
+      <div class="meta">${s.state === "ok" ? `${s.items} items in this window` : esc(s.reason || s.state || "")}</div>`;
+    body = sec("Items", (s.titles || []).map(it => { const node = G.byId.get(`item:${n.actor}:${it.id}`);
+      return row(svgIcon("item", 12, node?.cited ? "#2457e6" : "#a0a8b6"), esc(it.title), node?.cited ? `<span class="tag cited">cited</span>` : "", `select(G.byId.get('item:${n.actor}:${esc(it.id)}'))`); }).join(""));
   } else if (n.type === "item"){
     const cites = citedIn(n);
-    h += `<div class="caps">${esc(SRC[n.src] || n.src)} · ${esc(KIND[n.kind] || n.kind || "item")} · ${esc(name(n.actor))}</div><h3>${esc(n.title)}</h3>`;
-    if (n.url) h += `<div class="sub"><a href="${esc(n.url)}" target="_blank">Open source ↗</a></div>`;
-    h += `<div class="sec"><div class="caps">${cites.length ? "Used in the brief" : RUN?.brief ? "Not cited in the brief" : "Brief not ready yet"}</div>${cites.map(([w, t]) => `<div class="row"><span class="tag cited">${esc(w)}</span><span>${esc(t)}</span></div>`).join("")}</div>`;
+    head = `<div class="label">${esc(SRC[n.src] || n.src)} · ${esc(KIND[n.kind] || n.kind || "item")} · ${esc(name(n.actor))}</div><h3>${esc(n.title)}</h3>
+      ${n.url ? `<div class="meta"><a class="out" href="${esc(n.url)}" target="_blank">Open original ↗</a></div>` : ""}`;
+    body = sec(cites.length ? "Used in the brief" : RUN?.brief ? "Not cited in the brief" : "Brief not ready yet", cites.map(([w, t]) => row("·", `${esc(t)} <span style="color:var(--mute)">— ${esc(w)}</span>`)).join("") || " ");
   } else if (n.type === "decision"){
-    h += `<div class="caps">Decide in this meeting</div><h3>${esc(n.full)}</h3><div class="sec"><div class="caps">Based on</div>${(n.evidence || []).map(ev => { const m = evidenceNode(ev);
-      return m ? `<div class="row link" onclick="select(G.byId.get('${m.id}'))"><span class="ic">${svgIcon(m.src, 14)}</span><span>${esc(m.title)}</span></div>` : `<div class="row"><span class="tag">${esc(ev)}</span></div>`; }).join("") || `<div class="row">No linked sources.</div>`}</div>`;
+    head = `<div class="label">Decide in this meeting</div><h3>${esc(n.full)}</h3>`;
+    body = sec("Based on", (n.evidence || []).map(ev => { const m = evidenceNode(ev);
+      return m ? row(svgIcon(m.src, 14), esc(m.title), "", `select(G.byId.get('${m.id}'))`) : row("·", esc(ev)); }).join("") || "No linked sources.");
   }
-  $("#drawer").innerHTML = h; $("#drawer").classList.add("on");
+  $("#drawer").innerHTML = `<div class="head"><button class="x" onclick="select(null)" aria-label="Close">✕</button>${head}</div>${body}`;
+  $("#drawer").classList.add("on");
 }
+
 function closeDrawer(){ $("#drawer").classList.remove("on"); }
 
 /* ---------- side + progress ---------- */
 function renderSide(){
-  const side = $("#side"), ids = [...S.actors.keys()].sort((a, b) => (a === "master") - (b === "master"));
-  ids.forEach(id => {
-    let el = side.querySelector(`.term[data-id="${id}"]`);
-    if (!el){ el = document.createElement("div"); el.className = "term"; el.dataset.id = id; el.onclick = () => select(G.byId.get("hub:" + id));
-      el.innerHTML = `<div class="hd"><span class="av">${id === "master" ? "⌂" : initials(name(id))}</span><b></b><span class="role"></span><span class="st"></span></div><div class="body"></div>`; side.appendChild(el); }
-    const a = S.actors.get(id), st = id === "master" ? (RUN?.status === "done" ? "done" : S.stage === "merging" ? "merging" : "gathering") : a.status;
-    el.querySelector("b").textContent = name(id); el.querySelector(".role").textContent = id === "master" ? "master" : "laptop";
-    const s = el.querySelector(".st"); s.className = "st " + st; s.textContent = (st || "").replace("_", " ");
-    const body = el.querySelector(".body"), lines = S.lines.get(id) || [];
-    for (let i = body.children.length; i < lines.length; i++){ const d = document.createElement("div"); d.className = "ln new"; d.innerHTML = lines[i]; body.appendChild(d); }
-  });
+  const ids = [...S.actors.keys()].sort((a, b) => (a === "master") - (b === "master"));
+  const WORD = {queued:"Waiting", gathering:"Reading sources", running:"Reading sources", summarizing:"Summarizing", merging:"Merging", complete:"Done", done:"Done", failed:"Failed", timed_out:"No reply", error:"Error"};
+  const CLS = s => ACTIVE(s) || s === "queued" && false ? "running" : ["complete","done"].includes(s) ? "done" : ["failed","timed_out","error"].includes(s) ? "error" : "";
+  $("#contrib-count").textContent = ids.length ? `${ids.filter(i => i !== "master").length} laptops` : "";
+  $("#people").innerHTML = ids.map(id => { const a = S.actors.get(id), st = id === "master" ? (RUN?.status === "done" ? "done" : S.stage === "merging" ? "merging" : "gathering") : a.status;
+    const srcs = a.sources.map(s => { const x = S.sources.get(id + "/" + s) || {};
+      return `<span class="${x.state === "skipped" ? "skip" : ACTIVE(x.state) ? "busy" : ""}" title="${esc(SRC[s] || s)}">${svgIcon(s, 13, x.state === "skipped" ? "#a0a8b6" : ACTIVE(x.state) ? "#2457e6" : "#475467")}${x.state === "ok" ? x.items : x.state === "skipped" ? "0" : "…"}</span>`; }).join("");
+    return `<div class="person-row ${selected?.actor === id ? "sel" : ""}" data-id="${esc(id)}" onclick="select(G.byId.get('hub:${esc(id)}'))">
+      <span class="av">${id === "master" ? svgIcon("master", 14) : initials(name(id))}</span><span class="nm">${esc(name(id))}</span>
+      <span class="st ${CLS(st)}">${ACTIVE(st) ? '<span class="dot running"></span>' : ""}${WORD[st] || st}</span>${srcs ? `<span class="srcs">${srcs}</span>` : ""}</div>`; }).join("");
+  if (S.feedDirty){ S.feedDirty = false; $("#feed").innerHTML = S.feed.map(f => `<li><span class="t num">${f.t}</span><span><b>${esc(f.who)}</b> ${f.html}</span></li>`).join(""); }
 }
+
 function renderProgress(){
-  if (!S.actors.size){ $("#progress").innerHTML = ""; return; }
+  if (!S.actors.size){ $("#steps").innerHTML = ""; return; }
   const workers = [...S.actors.values()].filter(a => a.id !== "master"), done = workers.filter(a => ["complete","failed","timed_out"].includes(a.status)).length;
   const reached = RUN?.status === "done" ? 4 : S.stage === "merging" ? 3 : workers.some(a => ["summarizing","complete"].includes(a.status)) ? 2 : 1;
-  $("#progress").innerHTML = ["Gather", "Summarize", "Merge", "Brief"].map((label, i) =>
-    `<span class="step ${i < reached - 1 || RUN?.status === "done" ? "done" : ""} ${i === reached - 1 && RUN?.status !== "done" ? "on" : ""}">${label}${label === "Gather" ? ` ${done}/${workers.length}` : ""}</span>`).join('<span class="sep"></span>');
+  $("#steps").innerHTML = [`Gather ${done}/${workers.length}`, "Summarize", "Merge", "Brief"].map((label, i) =>
+    `<div class="${i < reached - 1 || RUN?.status === "done" ? "done" : i === reached - 1 ? "on" : ""}">${label}</div>`).join("");
 }
 
 /* ======================= brief ======================= */
-function chip(ids, index){ const id = (ids || [])[0]; if (!id) return "";
-  const meta = index[id] || {}, key = id.split(":").pop(), label = key.replace(/^GH-/, "").replace("ISSUE-", "#").replace("PR-", "PR #");
-  return `<a class="chip" ${meta.url ? `href="${esc(meta.url)}" target="_blank"` : ""} data-tip="${esc(meta.title || key)}">${esc(label)}</a>`; }
+function chip(){ return ""; }
+
 function renderBrief(run){
   const b = run.brief || {}, idx = run.index || {};
   if (!b.people){ $("#brief").innerHTML = `<div class="note">This brief has no per-person view.</div>`; return; }
+  const refs = [], refOf = id => { let k = refs.indexOf(id); if (k < 0){ refs.push(id); k = refs.length - 1; } return k + 1; };
+  const cite = ev => (ev || []).slice(0, 2).map(id => { const n = refOf(id), m = idx[id] || {};
+    return `<sup class="ref" data-tip="${esc(m.title || id)}">${m.url ? `<a href="${esc(m.url)}" target="_blank">[${n}]</a>` : `[${n}]`}</sup>`; }).join("");
   const actorFor = p => [...S.actors.keys()].find(a => personBrief(a) === p);
+  const decisions = (b.meeting_goals || []).map(g => `<li><input type="checkbox"><span>${esc(g.text)}${cite(g.evidence)}</span></li>`).join("");
   const people = b.people.map(p => { const a = actorFor(p);
-    return `<div class="person"><div class="who"><span class="av">${initials(p.name)}</span><b>${esc(p.name)}</b>${a ? `<button class="btn ghost" onclick="show('context');setTimeout(()=>select(G.byId.get('hub:${a}')),50)">in graph</button>` : ""}</div>
-    ${BUCKETS.map(([k, label, c]) => (p[k] || []).length ? `<div class="bucket" style="--c:${c}"><div class="caps">${label}</div><ul>${p[k].map(i => `<li><span>${esc(i.text)}</span>${chip(i.evidence, idx)}</li>`).join("")}</ul></div>` : "").join("") || `<div class="note">Nothing reported.</div>`}</div>`; }).join("");
-  const decide = (b.meeting_goals || []).map(g => `<label><input type="checkbox"><span>${esc(g.text)}</span>${chip(g.evidence, idx)}</label>`).join("");
-  const sec = (title, arr, f) => arr && arr.length ? `<div class="sec"><h3>${title}</h3><ul>${arr.map(f).join("")}</ul></div>` : "";
-  $("#brief").innerHTML = `<div class="wrap">
-    <div class="goal"><div class="caps">Team goal</div><p>${esc(b.team_goal || b.headline || "")}</p></div>
-    <div class="people">${people}</div>
-    ${decide ? `<div class="decide"><h3>Decide in this meeting</h3>${decide}</div>` : ""}
-    <details class="full"><summary>Full brief · commitments, gaps, actions</summary>
-      ${sec("Commitments", b.commitments, c => `<li><span class="badge ${esc(c.status)}">${esc((c.status || "").replace("_", " "))}</span> <b>${esc(c.owner || "")}</b> ${esc(c.what)} ${chip(c.evidence, idx)}</li>`)}
-      ${sec("Gaps", b.gaps, g => `<li>${esc(g.description)} <span style="color:var(--mute)">${esc(g.why_it_matters || "")}</span> ${chip(g.evidence, idx)}</li>`)}
-      ${sec("Action items", b.action_items, a => `<li><span class="badge ${esc(a.priority)}">${esc(a.priority || "")}</span> ${esc(a.what)} <b>${esc(a.owner || "")}</b> ${chip(a.evidence, idx)}</li>`)}
-      ${sec("Dependencies & conflicts", b.dependencies_and_conflicts, d => `<li>${esc(d.description)} ${chip(d.evidence, idx)}</li>`)}
-    </details></div>`;
-  document.querySelectorAll(".decide input").forEach(i => i.onchange = () => i.parentElement.classList.toggle("done", i.checked));
+    return `<div><div class="who"><span class="av">${initials(p.name)}</span><b>${esc(p.name)}</b>${a ? `<button class="secondary" onclick="show('context');setTimeout(()=>select(G.byId.get('hub:${a}')),50)">Show in graph</button>` : ""}</div>
+      ${BUCKETS.map(([k, label]) => (p[k] || []).length ? `<div class="bucket"><div class="label">${label}</div><ul>${p[k].map(i => `<li>${esc(i.text)}${cite(i.evidence)}</li>`).join("")}</ul></div>` : "").join("") || `<p class="label">Nothing reported.</p>`}</div>`; }).join("");
+  const list = (title, arr, f) => arr && arr.length ? `<div class="blk"><h2>${title}</h2><ul>${arr.map(f).join("")}</ul></div>` : "";
+  const more = list("Commitments", b.commitments, c => `<li><span class="status-t ${esc(c.status)}">${esc((c.status || "").replace("_", " "))}</span> ${c.owner ? `<b>${esc(c.owner)}</b> · ` : ""}${esc(c.what)}${cite(c.evidence)}</li>`)
+    + list("Gaps", b.gaps, g => `<li>${esc(g.description)}${cite(g.evidence)}</li>`)
+    + list("Action items", b.action_items, a => `<li>${esc(a.what)}${a.owner ? ` — <b>${esc(a.owner)}</b>` : ""}${cite(a.evidence)}</li>`)
+    + list("Dependencies and conflicts", b.dependencies_and_conflicts, d => `<li>${esc(d.description)}${cite(d.evidence)}</li>`);
+  const workers = [...S.actors.keys()].filter(a => a !== "master").length, when = new Date(run.started*1000).toLocaleString([], {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
+  const body = `<div class="doc"><div class="kicker">Pre-meeting brief</div><h1>${esc(run.opts?.meeting || "Team sync")}</h1>
+    <div class="byline">${when} · ${workers} laptops · last ${esc(run.opts?.since || "14d")}</div>
+    <p class="lead">${esc(b.team_goal || b.headline || "")}</p>
+    ${decisions ? `<h2>Decide in this meeting</h2><ol class="decisions">${decisions}</ol>` : ""}
+    <h2>By person</h2><div class="cols">${people}</div>
+    __SOURCES__
+    ${more ? `<details class="more"><summary>Full brief: commitments, gaps, actions</summary>${more}</details>` : ""}</div>`;
+  const sources = refs.length ? `<h2>Sources</h2><ol class="sources">${refs.map((id, i) => { const m = idx[id] || {};
+    return `<li><span class="n">${i + 1}</span>${m.url ? `<a href="${esc(m.url)}" target="_blank">${esc(m.title || id)}</a>` : esc(m.title || id)}</li>`; }).join("")}</ol>` : "";
+  $("#brief").innerHTML = body.replace("__SOURCES__", sources);
+  document.querySelectorAll(".decisions input").forEach(i => i.onchange = () => i.parentElement.classList.toggle("checked", i.checked));
 }
+
 function tip(ev, html){ const t = $("#tip"); t.innerHTML = html; t.style.display = "block"; t.style.left = ev.clientX + 14 + "px"; t.style.top = ev.clientY + 14 + "px"; }
-document.addEventListener("mouseover", ev => { const c = ev.target.closest(".chip"); if (c) tip(ev, esc(c.dataset.tip)); });
-document.addEventListener("mouseout", ev => { if (ev.target.closest(".chip")) $("#tip").style.display = "none"; });
+document.addEventListener("mouseover", ev => { const c = ev.target.closest("[data-tip]"); if (c) tip(ev, esc(c.dataset.tip)); });
+document.addEventListener("mouseout", ev => { if (ev.target.closest("[data-tip]")) $("#tip").style.display = "none"; });
 
 /* ======================= tasks ======================= */
-const COLS = [["todo","To do","#9aa3b5"],["in_progress","In progress","#2f6bff"],["blocked","Blocked","#d9473b"],["done","Done","#1f9d63"]];
+const COLS = [["todo","To do"],["in_progress","In progress"],["blocked","Blocked"],["done","Done"]];
 let TASKS = [], who = "all", TMETA = null;
 async function loadTasks(){ const j = await (await fetch("/api/tasks")).json(); TASKS = j.tasks; TMETA = j; renderTasks(); }
 function renderTasks(){
-  const owners = [...new Set(TASKS.map(t => t.owner || "unassigned"))], list = TASKS.filter(t => who === "all" || (t.owner || "unassigned") === who);
-  $("#tasks").innerHTML = `<div class="wrap" style="max-width:1400px">
-    <div class="filters">${["all", ...owners].map(o => `<button class="${o === who ? "on" : ""}" data-o="${esc(o)}">${esc(o === "all" ? "Everyone" : o === "unassigned" ? "Unassigned" : name(o))}</button>`).join("")}</div>
-    ${TASKS.length ? "" : `<div class="note">No tasks yet. They appear once the After stage processes a meeting${TMETA && !TMETA.after_db_found ? ` (no After database at ${esc(TMETA.after_db)})` : ""}.</div>`}
-    <div class="board">${COLS.map(([k, label, c]) => { const col = list.filter(t => (t.status || "todo") === k);
-      return `<div class="col" data-s="${k}"><h4><span class="caps" style="--c:${c}">${label}</span><span class="n">${col.length}</span></h4>${col.map(card).join("")}</div>`; }).join("")}</div></div>`;
-  document.querySelectorAll(".filters button").forEach(b => b.onclick = () => { who = b.dataset.o; renderTasks(); });
+  const key = t => t.owner ? name(t.owner).toLowerCase() : "unassigned";
+  const owners = [...new Set(TASKS.map(key))], list = TASKS.filter(t => who === "all" || key(t) === who);
+  $("#tasks").innerHTML = `<div class="doc" style="max-width:1360px">
+    <div class="tasks-head"><h1>Tasks</h1><div class="seg">${["all", ...owners].map(o => `<button class="${o === who ? "on" : ""}" data-o="${esc(o)}">${esc(o === "all" ? "Everyone" : o === "unassigned" ? "Unassigned" : o.replace(/^./, c => c.toUpperCase()))}</button>`).join("")}</div></div>
+    ${TASKS.length ? "" : `<div class="note">No tasks yet. They appear after the After stage processes a meeting.</div>`}
+    <div class="board">${COLS.map(([k, label]) => { const col = list.filter(t => (t.status || "todo") === k);
+      return `<div class="col" data-s="${k}"><h3>${label}<span class="num">${col.length}</span></h3>${col.map(card).join("")}</div>`; }).join("")}</div></div>`;
+  document.querySelectorAll(".seg button").forEach(b => b.onclick = () => { who = b.dataset.o; renderTasks(); });
   document.querySelectorAll(".task[draggable=true]").forEach(c => c.ondragstart = ev => ev.dataTransfer.setData("text", c.dataset.id));
   document.querySelectorAll(".col").forEach(col => {
     col.ondragover = ev => { ev.preventDefault(); col.classList.add("over"); }; col.ondragleave = () => col.classList.remove("over");
@@ -634,22 +725,35 @@ function renderTasks(){
       t.status = col.dataset.s; renderTasks(); await fetch(`/api/tasks/${id}`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({status:t.status})}); };
   });
 }
+
 function card(t){
-  const own = t.owner ? `<span class="av" title="${esc(name(t.owner))}">${initials(name(t.owner))}</span>` : `<span class="flag">unassigned</span>`;
-  const flags = (t.flags || []).filter(f => f && f !== "unassigned").map(f => `<span class="flag">${esc(f.replace("_", " "))}</span>`).join("");
+  const warn = (t.flags || []).filter(f => f && f !== "unassigned" && !["high","medium","low"].includes(f)).map(f => ({no_due_date:"No due date", unassigned:"Unassigned"})[f] || f.replace(/_/g, " "));
   return `<div class="task ${t.origin === "after" ? "" : "ro"}" draggable="${t.origin === "after"}" data-id="${esc(t.id)}" title="${esc(t.quote || "")}">
-    <div class="t">${esc(t.title)}</div><div class="meta">${own}${t.due ? `<span class="badge">due ${esc(t.due)}</span>` : ""}${flags}
-    ${t.url ? `<a class="chip" href="${esc(t.url)}" target="_blank">issue ↗</a>` : ""}<span class="org">${t.origin === "after" ? esc(t.channel || "after") : "brief"}</span></div></div>`;
+    <div class="t">${esc(t.title)}</div>
+    <div class="meta">${t.owner ? `<span class="av">${initials(name(t.owner))}</span>${esc(name(t.owner))}` : `<span class="warn">Unassigned</span>`}
+      ${t.due ? `<span>Due ${esc(t.due)}</span>` : ""}${warn.map(w => `<span class="warn">${esc(w)}</span>`).join("")}
+      ${t.url ? `<a href="${esc(t.url)}" target="_blank" style="color:var(--accent);text-decoration:none">Issue ↗</a>` : ""}
+      <span class="src">${t.origin === "after" ? (t.channel === "github" ? "GitHub" : "Slack") : "Brief"}</span></div></div>`;
 }
 
 /* ======================= boot ======================= */
 (async () => {
   await document.fonts.ready; await loadIcons(); initGraph();
   CFG = await (await fetch("/api/config")).json();
-  if (CFG.demo) $("#go").innerHTML = "▶ Generate prep <span style='opacity:.65'>· demo</span>";
+  await loadHistory();
+  if (CFG.demo) $("#demo").style.display = "inline-block";
+  if (["#brief", "#tasks"].includes(location.hash)) setTimeout(() => show(location.hash.slice(1)), 800);
   const r = await fetch("/api/runs/latest");
-  if (r.ok){ const run = await r.json(); attach(run.id); } else syncGraph();
+  if (r.ok){ const run = await r.json(); G.live = run.status === "running"; attach(run.id); } else syncGraph();
+  setInterval(() => { if (RUN?.status === "running") setStatus("running", stageLabel()); }, 1000);
+  // Pick up runs started elsewhere (Slack @agent, another browser) and animate them live.
+  setInterval(async () => {
+    const x = await fetch("/api/runs/latest?after=999999"); if (!x.ok) return;
+    const run = await x.json();
+    if (run.id !== RUN?.id && run.status === "running"){ resetAll(); G.live = true; attach(run.id); show("context"); }
+  }, 2500);
 })();
+
 </script>
 </body>
 </html>
