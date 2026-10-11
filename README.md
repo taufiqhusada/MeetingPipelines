@@ -1,9 +1,41 @@
 # Charlotte
 
-**Connects your work.** Meeting agent for engineering teams: **Before** (context gathering) → **During** (live transcript) → **After** (summary, task delegation, agent actions).
+## Connects your work.
+
+**We’re building Charlotte: a meeting intelligence system that turns the work already happening across your team into shared context, clear decisions, and accountable next steps.**
+
+Teams lose momentum when the truth is scattered across coding sessions, pull requests, docs, inboxes, and meeting recordings. Charlotte connects those signals across the full meeting lifecycle:
+
+- **Before:** assembles evidence-backed context from the tools where work happened.
+- **During:** captures the conversation and decisions.
+- **After:** produces summaries, routes human follow-ups, and prepares agent work for approval.
+
+For this hackathon demo, Charlotte shows a live graph of the context gathered from each teammate’s laptop, merges it into a team brief, and preserves a replayable run history. It is designed to be privacy-conscious: personal sources are read locally and workers send the master only a compact brief and citation index.
+
+## What we built
 
 - [`meetpipe/`](#before-stage-pre-meeting-context-meetpipe): pre-meeting context brief: coding-agent logs, GitHub, Gmail, Drive → progress, commitments vs. evidence, gaps, action items.
 - [`after/`](after/README.md): post-meeting agent: summary, progress vs. last meeting, human tasks to GitHub/Slack, agent tasks (calendar, report, Darwin search) with approval.
+
+### Architecture at a glance
+
+```text
+Each teammate’s laptop                         Master dashboard
+local sessions + connected sources  ──brief──▶ live context graph → team brief
+  Claude/Codex · Gmail · Drive · Fireflies       Reset · Replay · task tracker
+```
+
+The implementation uses a local long-poll worker for each teammate, an authenticated coordinator for work dispatch, and a browser dashboard for live progress and replay. The source connectors and coding-agent CLI run locally; the coordinator receives summaries rather than raw personal context.
+
+## Hackathon demo
+
+Run the dashboard in demo mode to present the product without connecting teammates or sending work to a coordinator:
+
+```bash
+uv run run.py dashboard --demo --port 8771 --llm codex
+```
+
+Open `http://localhost:8771`, then select **Run live**. In demo mode that button plays seeded/local demo data only—it does not call the local worker or a coordinator. Use **Reset** to clear the view and **Replay** to revisit a saved dashboard run.
 
 ## Before stage: pre-meeting context (`meetpipe`)
 
