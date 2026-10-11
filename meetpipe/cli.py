@@ -1,4 +1,4 @@
-"""CLI: doctor | connect | setup-github | run | slack-bot | coordinator | worker | aggregate."""
+"""CLI: doctor | connect | setup-github | run | slack-bot | coordinator | worker | fireflies-export | aggregate."""
 
 from __future__ import annotations
 
@@ -66,6 +66,17 @@ def cmd_doctor(args) -> int:
         except Exception as e:
             _line(False, "google", f"{type(e).__name__}: {e}")
 
+    from .connectors import fireflies
+    if not settings.fireflies_api_key:
+        _line(None, "fireflies", "no FIREFLIES_API_KEY in .env (optional)")
+    else:
+        try:
+            ts = fireflies.recent(limit=5)
+            latest = f"; latest: {ts[0].get('title')!r}" if ts else ""
+            _line(True, "fireflies", f"API ok, {len(ts)} recent transcripts{latest}")
+        except Exception as e:
+            _line(False, "fireflies", str(e)[:200])
+
     tdir = settings.transcripts_dir
     count = len([p for p in tdir.rglob("*") if p.is_file()]) if tdir.exists() else 0
     _line(count > 0 or None, "local", f"{count} files in {tdir}")
@@ -121,6 +132,33 @@ def cmd_coordinator(args) -> int:
 def cmd_worker(args) -> int:
     from .worker import serve
     serve(path=args.path, llm_name=args.llm, poll_wait=args.wait)
+    return 0
+
+
+def cmd_fireflies_export(args) -> int:
+    """Hand a Fireflies meeting to the After stage (after/schemas.py Transcript JSON)."""
+    import requests
+
+    from .connectors import fireflies
+
+    ts = fireflies.recent(limit=25)
+    if args.id:
+        ts = [t for t in ts if t["id"] == args.id]
+    if not ts:
+        print("No matching Fireflies transcript (it can take a few minutes after the meeting ends).")
+        return 1
+    payload = fireflies.to_after_transcript(ts[0])
+    out = Path(args.out or settings.runs_dir / f"fireflies_{ts[0]['id']}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    print(f"✔ {payload['title']} ({payload['date']}, {len(payload['lines'])} lines, "
+          f"speakers: {', '.join(payload['attendees']) or '-'}) → {out}")
+    if args.send:
+        r = requests.post(args.send.rstrip("/") + "/api/process/json", json=payload, timeout=300)
+        print(f"→ After stage {args.send}: HTTP {r.status_code}")
+        if not r.ok:
+            print(r.text[:500])
+            return 1
     return 0
 
 
@@ -196,6 +234,12 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--wait", type=int, default=int(os.getenv("MEETPIPE_WORKER_LONGPOLL_SECONDS", "285")),
                    help="long-poll duration in seconds (10–300; default 285)")
     w.set_defaults(fn=cmd_worker)
+
+    ff = sub.add_parser("fireflies-export", help="latest Fireflies meeting → After stage Transcript JSON")
+    ff.add_argument("--id", help="Fireflies transcript id (default: most recent)")
+    ff.add_argument("--out", help="output JSON path (default: runs/fireflies_<id>.json)")
+    ff.add_argument("--send", metavar="URL", help="also POST it to the After app, e.g. http://localhost:8000")
+    ff.set_defaults(fn=cmd_fireflies_export)
 
     g = sub.add_parser("aggregate", help="merge several briefs into one team brief")
     g.add_argument("briefs", nargs="+", help="run dirs or brief.json paths, optionally label=path")

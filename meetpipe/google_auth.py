@@ -11,6 +11,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
 from .config import settings
+from .models import SourceNotConfigured
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -23,7 +24,7 @@ SCOPES = [
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 
-class GoogleNotConnected(RuntimeError):
+class GoogleNotConnected(SourceNotConfigured):
     pass
 
 

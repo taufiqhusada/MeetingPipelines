@@ -11,14 +11,13 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import settings
-from .connectors import claude_code, codex, drive, github, gmail, local_transcripts
-from .google_auth import GoogleNotConnected
-from .models import ContextItem, RunScope
+from .connectors import after_db, claude_code, codex, drive, fireflies, github, gmail, local_transcripts
+from .models import ContextItem, RunScope, SourceNotConfigured
 from .redact import redact
 
-SOURCES = ["claude_code", "codex", "github", "gmail", "drive", "local"]
+SOURCES = ["claude_code", "codex", "github", "gmail", "fireflies", "after", "drive", "local"]
 LABELS = {"claude_code": "Claude Code sessions", "codex": "Codex sessions", "github": "GitHub",
-          "gmail": "Gmail (meeting transcripts & notes)", "drive": "Google Drive", "local": "Local transcripts"}
+          "gmail": "Gmail (meeting transcripts & notes)", "fireflies": "Fireflies meeting transcripts", "after": "After-stage records (previous meetings' tasks & goals)", "drive": "Google Drive", "local": "Local transcripts"}
 
 
 def _timed(name, fn):
@@ -26,7 +25,7 @@ def _timed(name, fn):
     try:
         items = fn()
         return name, items, {"status": "ok", "items": len(items), "seconds": round(time.time() - t, 1)}
-    except GoogleNotConnected as e:
+    except SourceNotConfigured as e:
         return name, [], {"status": "skipped", "reason": str(e)}
     except Exception as e:
         return name, [], {"status": "error", "reason": f"{type(e).__name__}: {e}",
@@ -39,6 +38,8 @@ def gather(scope: RunScope, sources: list[str], llm=None) -> tuple[dict[str, lis
         "codex": lambda: codex.fetch(scope),
         "github": lambda: github.fetch(scope),
         "gmail": lambda: gmail.fetch(scope),
+        "fireflies": lambda: fireflies.fetch(scope),
+        "after": lambda: after_db.fetch(scope),
         "local": lambda: local_transcripts.fetch(scope),
     }
     results, status = {}, {}
