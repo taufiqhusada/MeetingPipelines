@@ -140,7 +140,17 @@ def test_approve_report_builds_html(demo_meeting):
     assert any("report attached" in o["body"].lower() for o in m["outbox"])
 
 
-def test_other_task_is_routed_to_human_not_executed(demo_meeting):
+def test_other_task_runs_local_research(demo_meeting, monkeypatch):
+    from after import research
+    monkeypatch.setattr(research, "run", lambda task: {"summary": "3 options found", "sources": ["https://x"]})
+    task = next(t for t in demo_meeting["agent_tasks"] if t["kind"] == "other")
+    m = pipeline.decide(task["id"], approve=True)
+    result = next(t for t in m["agent_tasks"] if t["id"] == task["id"])["result"]
+    assert result["summary"] == "3 options found" and result["darwin_route"] == "agent for order snacks"
+    assert "3 options found" in m["outbox"][-1]["body"]
+
+
+def test_other_task_without_key_falls_back_to_human(demo_meeting):
     task = next(t for t in demo_meeting["agent_tasks"] if t["kind"] == "other")
     m = pipeline.decide(task["id"], approve=True)
     result = next(t for t in m["agent_tasks"] if t["id"] == task["id"])["result"]
@@ -189,6 +199,8 @@ def test_api(monkeypatch):
     assert client.get("/api/meetings/nope").status_code == 404
     assert client.post(f"/api/agent-tasks/{m['agent_tasks'][0]['id']}/maybe").status_code == 400
     assert client.post("/api/process/text", json={"text": "Sam: hi", "meeting_id": "x"}).status_code == 400
+    darwin = client.post(f"/api/agent-tasks/{m['agent_tasks'][2]['id']}/darwin", json={"agent_id": "ag_ready"})
+    assert darwin.status_code == 400 and "DARWIN_API_KEY" in darwin.json()["detail"]  # reached the Act route
     names = [x["name"] for x in client.get("/api/samples").json()]
     assert "feature_test.txt" in names and "before_kickoff_sample.vtt" in names
     page = client.get("/")
@@ -275,4 +287,145 @@ def test_test_label_marks_calendar_events(demo_meeting, monkeypatch):
     task = next(t for t in demo_meeting["agent_tasks"] if t["kind"] == "schedule_meeting")
     pipeline.decide(task["id"], approve=True)
     ics = (config.OUTPUT_DIR / "invites" / "sync-2026-10-11-next.ics").read_text()
-    assert "SUMMARY:[TEST] " in ics and "This is a test, no action needed." in ics
+    assert "SUMMARY:[TEST] Next weekly sync" in ics and "This is a test, no action needed." in ics
+
+
+def test_same_day_meeting_compares_against_earlier_one(demo_meeting):
+    later = transcripts.from_text("George: quick follow-up", "followup-2026-10-11", day="2026-10-11")
+    db.execute("INSERT INTO meetings (id, title, date, source) VALUES (?,?,?,?)", later.meeting_id, "f", later.date, "manual")
+    goals = db.previous_goals(later.date, later.meeting_id)
+    assert [g["goal"] for g in goals] == demo_meeting["analysis"]["next_meeting_goals"]
+    # a meeting never compares against itself
+    assert db.previous_goals("2026-10-11", "sync-2026-10-11")[0]["goal"].startswith("Before stage gathers")
+
+
+# ---------------------------------------------------------------- TranscripTonic
+
+ADVANCED = {
+    "webhookBodyType": "advanced", "meetingSoftware": "Google Meet", "meetingTitle": "Weekly Sync",
+    "meetingStartTimestamp": "2026-10-11T21:00:00.000Z", "meetingEndTimestamp": "2026-10-11T21:30:00.000Z",
+    "transcript": [
+        {"personName": "George Zhou", "timestamp": "2026-10-11T21:00:05.000Z", "transcriptText": "Let's start."},
+        {"personName": "Michael Pham", "timestamp": "2026-10-11T21:00:20.000Z", "transcriptText": "Slack works."},
+    ],
+    "chatMessages": [{"personName": "Taufiq", "timestamp": "2026-10-11T21:00:10.000Z", "chatMessageText": "link?"}],
+}
+
+
+def test_transcriptonic_advanced_body():
+    t = transcripts.from_transcriptonic(ADVANCED)
+    assert t.meeting_id == "weekly-sync-20261011-1400" and t.date == "2026-10-11"  # 21:00Z = 2pm Pacific
+    assert [(l.speaker, l.t) for l in t.lines] == [("George Zhou", 5), ("Taufiq (chat)", 10), ("Michael Pham", 20)]
+    assert t.source == "transcriptonic" and t.attendees == ["George Zhou", "Michael Pham", "Taufiq"]
+
+
+def test_transcriptonic_simple_body():
+    body = {"webhookBodyType": "simple", "meetingTitle": "Sync", "meetingStartTimestamp": "OCT 11, 2026, 2:00 PM",
+            "transcript": "George Zhou (OCT 11, 2026, 2:00 PM)\nLet's start.\n\nMichael Pham (OCT 11, 2026, 2:01 PM)\nSlack works.\n\n",
+            "chatMessages": ""}
+    t = transcripts.from_transcriptonic(body)
+    assert [(l.speaker, l.text) for l in t.lines] == [("George Zhou", "Let's start."), ("Michael Pham", "Slack works.")]
+
+
+def test_transcriptonic_empty_is_rejected():
+    with pytest.raises(RuntimeError, match="captions"):
+        transcripts.from_transcriptonic({**ADVANCED, "transcript": [], "chatMessages": []})
+
+
+def test_transcriptonic_webhook_endpoint(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from after import app as app_module
+    processed = []
+    monkeypatch.setattr(app_module.pipeline, "process", lambda t: processed.append(t.meeting_id))
+    r = TestClient(app_module.app).post("/api/webhooks/transcriptonic", json=ADVANCED)
+    assert r.status_code == 202 and r.json()["lines"] == 3
+    assert processed == ["weekly-sync-20261011-1400"]
+
+
+def test_transcriptonic_you_becomes_self_name(monkeypatch):
+    monkeypatch.setattr(config, "TRANSCRIPT_SELF_NAME", "George Zhou")
+    body = {**ADVANCED, "transcript": [{"personName": "You", "timestamp": "2026-10-11T21:00:05.000Z",
+                                        "transcriptText": "I'll do it."}], "chatMessages": []}
+    assert transcripts.from_transcriptonic(body).lines[0].speaker == "George Zhou"
+
+
+# ---------------------------------------------------------------- Slack approval buttons
+
+def test_agent_tasks_posted_with_buttons(demo_meeting):
+    rows = [o for o in demo_meeting["outbox"] if "[Approve | Reject]" in o["body"]]
+    assert len(rows) == 1 and rows[0]["target"] == config.SLACK_CHANNEL
+
+
+def test_approval_blocks_layout(demo_meeting):
+    from after import slack_actions
+    blocks = slack_actions.approval_blocks("Sync", demo_meeting["agent_tasks"], "http://x")
+    actions = [b for b in blocks if b["type"] == "actions"]
+    assert [b["block_id"] for b in actions] == [f"after_task_{t['id']}" for t in demo_meeting["agent_tasks"]]
+    assert {e["action_id"] for e in actions[0]["elements"]} == {slack_actions.APPROVE, slack_actions.REJECT}
+
+
+class FakeSlack:
+    def __init__(self):
+        self.updates, self.ephemeral = [], []
+
+    def chat_update(self, **kw):
+        self.updates.append(kw)
+
+    def chat_postEphemeral(self, **kw):
+        self.ephemeral.append(kw)
+
+
+def _click(meeting, kind):
+    from after import slack_actions
+    task = next(t for t in meeting["agent_tasks"] if t["kind"] == kind)
+    blocks = slack_actions.approval_blocks("Sync", meeting["agent_tasks"], "http://x")
+    body = {"actions": [{"value": str(task["id"])}], "user": {"id": "U1", "username": "georgezhou1010"},
+            "channel": {"id": "C1"}, "message": {"ts": "1.0", "blocks": blocks}}
+    return task, body
+
+
+def test_slack_click_approves_via_api(demo_meeting, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from after import app as app_module, slack_actions
+    api = TestClient(app_module.app)
+    monkeypatch.setattr(slack_actions.httpx, "post", lambda url, params, timeout: api.post(url.replace("http://after", ""), params=params))
+    task, body = _click(demo_meeting, "meeting_report")
+    slack = FakeSlack()
+    text = slack_actions.handle_click("approve", body, slack, api_url="http://after")
+    assert text == "✅ Approved by <@U1>: recap + visuals posted"
+    final = slack.updates[-1]["blocks"]
+    swapped = next(b for b in final if b.get("block_id") == f"after_task_{task['id']}")
+    assert swapped["type"] == "context" and "Approved by" in swapped["elements"][0]["text"]
+    assert sum(b["type"] == "actions" for b in final) == 2  # other tasks keep their buttons
+    row = next(t for t in pipeline.get_meeting(demo_meeting["id"])["agent_tasks"] if t["id"] == task["id"])
+    assert row["approval"] == "approved" and row["result"]["approved_by"] == "georgezhou1010"
+
+
+def test_slack_click_from_outsider_is_refused(demo_meeting, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from after import app as app_module, slack_actions
+    api = TestClient(app_module.app)
+    monkeypatch.setattr(slack_actions.httpx, "post", lambda url, params, timeout: api.post(url.replace("http://after", ""), params=params))
+    task, body = _click(demo_meeting, "other")
+    body["user"] = {"id": "U9", "username": "stranger"}
+    text = slack_actions.handle_click("approve", body, FakeSlack(), api_url="http://after")
+    assert text.startswith("⚠️") and "isn't on the team list" in text
+    assert next(t for t in pipeline.get_meeting(demo_meeting["id"])["agent_tasks"] if t["id"] == task["id"])["approval"] == "pending"
+
+
+def test_slack_click_when_after_is_down_restores_buttons(demo_meeting, monkeypatch):
+    from after import slack_actions
+
+    def boom(*a, **k):
+        raise httpx_error
+
+    import httpx as _httpx
+    httpx_error = _httpx.ConnectError("refused")
+    monkeypatch.setattr(slack_actions.httpx, "post", boom)
+    task, body = _click(demo_meeting, "other")
+    slack = FakeSlack()
+    assert slack_actions.handle_click("approve", body, slack, api_url="http://after") == "error"
+    assert slack.updates[-1]["blocks"] == body["message"]["blocks"] and slack.ephemeral

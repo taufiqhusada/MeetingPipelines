@@ -1,0 +1,14 @@
+George: Hey both, quick one. I want to test the meeting agent end to end today.
+Michael: Sure. Slack side is stable, buttons still need the ngrok URL but messages and files work.
+Taufiq: Before stage is fine too. I'm still waiting on a review before I merge to main.
+George: Cool. So two things I want the agent to do after this call. First, set up a demo rehearsal with all three of us on Friday at 11am, one hour.
+Taufiq: Friday works for me. Can we put the run of show on the agenda? Intro, live demo, Darwin gap slide, Q and A.
+George: Yes, add that to the agenda.
+Michael: And I want to time the live demo, it has to fit in three minutes.
+George: Second thing: meeting agent, make a recap of this meeting with visuals, something we can drop in the pitch deck.
+Michael: Include the progress chart, that's the part judges will like.
+Taufiq: Decision then: we rehearse Friday, and the recap visuals go into the pitch deck.
+George: I'll review Taufiq's PR today so he can merge.
+Taufiq: Thanks. I'll merge right after and post brief.json in the channel.
+Michael: I'll set up ngrok before Friday so the Slack buttons work in the rehearsal.
+George: Perfect, that's it. Thanks.

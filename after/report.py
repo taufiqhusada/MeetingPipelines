@@ -27,7 +27,8 @@ def build(meeting: dict) -> str:
     a = meeting["analysis"]
     team = {u["handle"]: u["name"] for u in meeting["team"]}
     esc = html.escape
-    tasks_per_owner = Counter(team.get(t["owner"], "Unassigned") for t in meeting["human_tasks"])
+    first = {h: n.split()[0] for h, n in team.items()}  # short labels so chart text isn't clipped
+    tasks_per_owner = Counter(first.get(t["owner"], "Unassigned") for t in meeting["human_tasks"])
     goal_counts = Counter(g["status"] for g in a["goal_progress"])
 
     goals = "".join(

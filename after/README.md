@@ -10,7 +10,9 @@ Takes a meeting transcript and turns it into work:
 5. **Agent tasks**: queued for **approval** in the UI, then executed:
    - `schedule_meeting` → Google Calendar event with a Meet link (or an `.ics` invite until Google is set up)
    - `meeting_report` → one-page visual HTML report, link posted to Slack
-   - `other` (purchases, etc.) → **Darwin Search** finds agents that could do it; a human completes it (we never act through Darwin)
+   - `other` (purchases, research, ...) → **Darwin Search** finds which agent could do it; we run it locally with
+     Claude + web search (`research.py`): options, prices, links. It never buys or books; a human does the final step.
+     Darwin Act (`Run via Darwin`) lights up only for startable agents with an allowlisted key.
 6. `next_meeting_goals` are saved, so the next meeting is compared against them.
 
 ```
@@ -21,6 +23,17 @@ transcript (paste / JSON / Recall.ai bot)
    → report.py       visual report
    app.py + web/     FastAPI + one-page UI
 ```
+
+## Live Google Meet transcripts (free): TranscripTonic
+
+[TranscripTonic](https://github.com/vivek-nexus/transcriptonic) is a free, open-source Chrome extension that saves
+Google Meet transcripts from Meet's own captions (speaker names included) and POSTs them to a webhook the moment the
+meeting ends. No bot, no account, works with personal Gmail.
+
+1. Install it from the Chrome Web Store and join meetings in Chrome (it turns captions on itself).
+2. Extension → **Set up webhooks**: URL `http://localhost:8000/api/webhooks/transcriptonic`, body **Advanced**,
+   tick **auto-post after meeting**, Save (Chrome asks for permission to reach that URL).
+3. Keep the After server running. When the call ends, the meeting shows up at `http://localhost:8000` about 30s later.
 
 ## Run
 

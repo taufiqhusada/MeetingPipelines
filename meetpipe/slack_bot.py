@@ -216,6 +216,11 @@ def serve(path: str = ".", llm_name: str = "claude") -> None:
     from slack_bolt.adapter.socket_mode import SocketModeHandler
 
     app = App(token=os.environ["SLACK_BOT_TOKEN"])
+    try:  # After stage: Approve / Reject buttons for agent tasks (after/slack_actions.py)
+        from after.slack_actions import register as register_after_actions
+        register_after_actions(app)
+    except ImportError:
+        pass
     busy = threading.Lock()
     host = socket.gethostname().split(".")[0]
     coordinator_url = os.getenv("MEETPIPE_COORDINATOR_URL", "")

@@ -80,10 +80,11 @@ def team() -> list[dict]:
     return rows("SELECT * FROM users ORDER BY handle")
 
 
-def previous_goals(before_date: str) -> list[dict]:
-    """Goals set by the latest meeting before this one: what Before would compare against."""
+def previous_goals(before_date: str, meeting_id: str | None = None) -> list[dict]:
+    """Goals set by the latest other meeting on or before this date: what this meeting is compared against."""
     r = rows(
-        "SELECT goals_json FROM meetings WHERE date < ? AND goals_json IS NOT NULL ORDER BY date DESC LIMIT 1",
-        before_date,
+        "SELECT goals_json FROM meetings WHERE date <= ? AND id != ? AND goals_json IS NOT NULL "
+        "ORDER BY date DESC, created_at DESC, rowid DESC LIMIT 1",
+        before_date, meeting_id or "",
     )
     return json.loads(r[0]["goals_json"]) if r else []
