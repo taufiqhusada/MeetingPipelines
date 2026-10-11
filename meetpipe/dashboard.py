@@ -25,19 +25,63 @@ RUNS: dict[str, dict] = {}
 LOCK = threading.Lock()
 
 
+def _history_dir() -> Path:
+    path = settings.runs_dir / "dashboard"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _snapshot(run: dict) -> dict:
+    """Return the durable, replayable portion of a dashboard run."""
+    return {key: value for key, value in run.items() if key not in {"result", "cancel"}}
+
+
+def _save(run: dict) -> None:
+    """Persist every event so a completed run can be replayed after a restart."""
+    path = _history_dir() / f"{run['id']}.json"
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    tmp.write_text(json.dumps(_snapshot(run), ensure_ascii=False, default=str), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _load_history(run_id: str) -> dict | None:
+    if not run_id or "/" in run_id or "\\" in run_id:
+        return None
+    path = _history_dir() / f"{run_id}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _history() -> list[dict]:
+    rows = []
+    for path in _history_dir().glob("*.json"):
+        run = _load_history(path.stem)
+        if run:
+            rows.append({key: run.get(key) for key in ("id", "mode", "opts", "started", "status", "error")})
+    return sorted(rows, key=lambda row: row.get("started") or 0, reverse=True)
+
+
 # ------------------------------------------------------------------ run records
 
 def _new_run(mode: str, opts: dict) -> dict:
     run = {"id": uuid.uuid4().hex[:12], "mode": mode, "opts": opts, "started": time.time(), "status": "running",
-           "job_id": None, "workers": {}, "events": [], "brief": None, "index": {}, "error": None}
+           "job_id": None, "workers": {}, "events": [], "brief": None, "index": {}, "error": None,
+           "cancel": threading.Event()}
     with LOCK:
         RUNS[run["id"]] = run
         RUNS["latest"] = run
+    _save(run)
     return run
 
 
 def _emit(run: dict, event: dict) -> None:
     with LOCK:
+        if run["cancel"].is_set():
+            return
         event = {"seq": len(run["events"]) + 1, "ts": event.get("ts") or time.time(),
                  "actor": event.get("actor") or "master", **event}
         run["events"].append(event)
@@ -46,6 +90,23 @@ def _emit(run: dict, event: dict) -> None:
             run["workers"] = {w: "queued" for w in event.get("workers", [])}
         if event.get("kind") == "worker_status":
             run["workers"][event["actor"]] = event["status"]
+    _save(run)
+
+
+def _finish(run: dict, status: str, *, error: str | None = None, brief: dict | None = None,
+            index: dict | None = None, result=None) -> None:
+    if run["cancel"].is_set():
+        return
+    with LOCK:
+        run["status"] = status
+        run["error"] = error
+        if brief is not None:
+            run["brief"] = brief
+        if index is not None:
+            run["index"] = index
+        if result is not None:
+            run["result"] = result
+    _save(run)
 
 
 # ------------------------------------------------------------------ live mode
@@ -83,11 +144,10 @@ def _live(run: dict) -> None:
         result = _collect_team_brief(scope, run["opts"], run["opts"].get("llm", settings.llm),
                                      on_event=lambda e: _emit(run, e))
         time.sleep(1.5)  # let the poller flush the final worker events
-        run["brief"], run["index"], run["result"] = result.brief, result.index, result
-        run["status"] = "done"
+        _finish(run, "done", brief=result.brief, index=result.index, result=result)
         _emit(run, {"kind": "stage", "stage": "done", "actor": "team"})
     except Exception as e:
-        run["status"], run["error"] = "error", f"{type(e).__name__}: {e}"
+        _finish(run, "error", error=f"{type(e).__name__}: {e}")
         _emit(run, {"kind": "stage", "stage": "error", "actor": "team", "reason": run["error"]})
     finally:
         stop.set()
@@ -192,8 +252,7 @@ def _demo(run: dict) -> None:
         _emit(run, event)
     _emit(run, {"kind": "stage", "stage": "merging", "actor": "master", "briefs": ["shared", *workers]})
     time.sleep(3)
-    run["brief"], run["index"] = brief, index
-    run["status"] = "done"
+    _finish(run, "done", brief=brief, index=index)
     _emit(run, {"kind": "stage", "stage": "done", "actor": "team"})
 
 
@@ -205,6 +264,54 @@ def start_run(opts: dict, demo: bool) -> tuple[dict | None, str | None]:
         return None, "a run is already in progress"
     run = _new_run("demo" if demo else "live", opts)
     threading.Thread(target=_demo if demo else _live, args=(run,), daemon=True).start()
+    return run, None
+
+
+def reset_latest() -> dict | None:
+    """Detach the dashboard from the current run without deleting its audit trail.
+
+    A coordinator job already delivered to laptops cannot be recalled, but its future
+    events are ignored and the master UI is immediately ready for another run.
+    """
+    with LOCK:
+        run = RUNS.get("latest")
+        if not run:
+            return None
+        run["cancel"].set()
+        run["status"] = "reset"
+        run["error"] = "Reset by the master"
+        RUNS.pop("latest", None)
+    _save(run)
+    return run
+
+
+def _replay(run: dict, source: dict) -> None:
+    previous = None
+    for saved in source.get("events", []):
+        if run["cancel"].is_set():
+            return
+        ts = saved.get("ts")
+        if previous is not None and isinstance(ts, (int, float)) and isinstance(previous, (int, float)):
+            time.sleep(min(1.5, max(0.05, ts - previous)))
+        previous = ts
+        event = {key: value for key, value in saved.items() if key not in {"seq", "ts"}}
+        _emit(run, event)
+    _finish(run, "done", brief=source.get("brief"), index=source.get("index") or {})
+
+
+def start_replay(run_id: str) -> tuple[dict | None, str | None]:
+    latest = RUNS.get("latest")
+    if latest and latest["status"] == "running":
+        return None, "a run is already in progress"
+    source = _load_history(run_id)
+    if not source:
+        return None, "run not found in history"
+    if not source.get("events"):
+        return None, "this run has no events to replay"
+    run = _new_run("replay", source.get("opts") or {})
+    run["replay_of"] = source["id"]
+    _save(run)
+    threading.Thread(target=_replay, args=(run, source), daemon=True).start()
     return run, None
 
 
@@ -329,6 +436,8 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path in ("/", "/index.html"):
             return self._send(200, (WEB / "dashboard.html").read_bytes(), "text/html; charset=utf-8")
+        if url.path == "/assets/charlotte-logo.png":
+            return self._send(200, (WEB / "assets" / "charlotte-logo.png").read_bytes(), "image/png")
         if url.path == "/api/config":
             people = {}
             for pair in os.getenv("MEETPIPE_PEOPLE", "").split(","):
@@ -337,13 +446,15 @@ class Handler(BaseHTTPRequestHandler):
                     people[alias.strip()] = name.strip()
             return self._send(200, {"demo": self.server.demo, "llm": settings.llm, "people": people,
                                     "coordinator": bool(os.getenv("MEETPIPE_COORDINATOR_URL"))})
+        if url.path == "/api/runs":
+            return self._send(200, {"runs": _history()})
         if url.path.startswith("/api/runs/"):
-            run = RUNS.get(url.path.rsplit("/", 1)[1])
+            run = RUNS.get(url.path.rsplit("/", 1)[1]) or _load_history(url.path.rsplit("/", 1)[1])
             if not run:
                 return self._send(404, {"error": "no run yet"})
             after = int(parse_qs(url.query).get("after", ["0"])[0])
             with LOCK:
-                view = {k: v for k, v in run.items() if k not in ("events", "result")}
+                view = {k: v for k, v in run.items() if k not in ("events", "result", "cancel")}
                 view["events"] = run["events"][after:]
             if view["status"] != "done":
                 view["brief"], view["index"] = None, {}
@@ -358,6 +469,15 @@ class Handler(BaseHTTPRequestHandler):
             body = self._body()
         except json.JSONDecodeError:
             return self._send(400, {"error": "bad json"})
+        if url.path == "/api/runs/reset":
+            run = reset_latest()
+            return self._send(200, {"ok": True, "reset": run["id"] if run else None})
+        replay = url.path.removeprefix("/api/runs/").removesuffix("/replay")
+        if url.path.startswith("/api/runs/") and url.path.endswith("/replay"):
+            run, err = start_replay(replay)
+            if err:
+                return self._send(409 if "progress" in err else 404, {"error": err})
+            return self._send(201, {"id": run["id"]})
         if url.path == "/api/runs":
             opts = {"since": body.get("since") or "14d", "meeting": body.get("meeting") or None,
                     "path": self.server.path, "llm": self.server.llm}

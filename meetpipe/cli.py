@@ -238,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     db.add_argument("--host", default=os.getenv("MEETPIPE_DASHBOARD_HOST", "127.0.0.1"),
                     help="0.0.0.0 to let teammates on the LAN open it")
     db.add_argument("--port", type=int, default=int(os.getenv("MEETPIPE_DASHBOARD_PORT", "8770")))
-    db.add_argument("--demo", action="store_true", help="replay a scripted run from local data (no workers needed)")
+    db.add_argument("--demo", action="store_true", help="run demo data instead of a live prep")
     db.add_argument("--slack", action="store_true",
                     help="also answer '@agent generate meeting prep' (use instead of slack-bot; one listener only)")
     db.add_argument("--path", default=".")
