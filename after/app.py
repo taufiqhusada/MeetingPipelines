@@ -43,6 +43,13 @@ def status():
             "meetings": db.rows("SELECT id, title, date, source FROM meetings ORDER BY date DESC")}
 
 
+@app.get("/api/samples")
+def samples():
+    """Fake transcripts for testing features (pasted-text and VTT formats)."""
+    folder = config.SEED_DIR / "transcripts"
+    return [{"name": f.name, "text": f.read_text()} for f in sorted(folder.glob("*")) if f.suffix in (".txt", ".vtt")]
+
+
 @app.post("/api/process/demo")
 def process_demo():
     return _run(pipeline.process, transcripts.demo())
@@ -68,6 +75,20 @@ def decide(task_id: int, decision: str):
     if decision not in ("approve", "reject"):
         raise HTTPException(400, "decision must be approve or reject")
     return _run(pipeline.decide, task_id, decision == "approve")
+
+
+class DarwinRunIn(BaseModel):
+    agent_id: str
+
+
+@app.post("/api/agent-tasks/{task_id}/darwin")
+def run_via_darwin(task_id: int, body: DarwinRunIn):
+    return _run(pipeline.run_via_darwin, task_id, body.agent_id)
+
+
+@app.post("/api/agent-tasks/{task_id}/darwin/refresh")
+def refresh_darwin(task_id: int):
+    return _run(pipeline.refresh_darwin, task_id)
 
 
 # Recall.ai: send a bot to a live meeting, then process its transcript once the call ends.

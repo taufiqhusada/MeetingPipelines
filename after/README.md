@@ -33,6 +33,16 @@ cp .env.example .env          # fill in what you have; blanks fall back to dry-r
 
 With no keys at all, the demo transcript runs on a canned analysis and every message lands in the outbox, so the whole flow is demoable offline.
 
+## Tests
+
+```bash
+.venv/bin/python -m pytest after/tests -q   # offline: temp DB, no keys, DRY_RUN, Darwin stubbed
+```
+
+Sample transcripts for manual testing are in `after/seed/transcripts/` (pick one with **Load sample** in the UI):
+`feature_test.txt` exercises every feature, and `before_kickoff_sample.vtt` is the Before stage's VTT format.
+Set `SLACK_ONLY_TO=<your slack username>` to redirect every Slack message to yourself while testing live.
+
 ## Setup flags (shown at the top of the UI)
 
 | Key | Without it |
@@ -56,6 +66,15 @@ With no keys at all, the demo transcript runs on a canned analysis and every mes
 | POST | `/api/recall/bots` | `{meeting_url}`: send the Recall bot (free meeting captions) |
 | GET | `/api/recall/bots/{bot_id}` | Bot status / transcript readiness |
 | POST | `/api/recall/bots/{bot_id}/process` | Fetch the transcript and run the pipeline |
+
+## Team contacts
+
+`seed/team.json` holds names, roles, Slack usernames and GitHub handles. Emails (used for calendar invites) go in the
+git-ignored `after/data/team_contacts.json`, because this repo is public:
+
+```json
+{"george": {"email": "..."}, "michael": {"email": "..."}, "taufiq": {"email": "..."}}
+```
 
 ## Contracts for teammates
 

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS human_tasks (
 );
 CREATE TABLE IF NOT EXISTS agent_tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT, meeting_id TEXT, title TEXT, kind TEXT, payload_json TEXT,
-    approval TEXT DEFAULT 'pending', result_json TEXT, darwin_json TEXT
+    approval TEXT DEFAULT 'pending', result_json TEXT, darwin_json TEXT, act_json TEXT
 );
 CREATE TABLE IF NOT EXISTS outbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT, meeting_id TEXT, channel TEXT, target TEXT, body TEXT,
@@ -43,12 +43,22 @@ def conn():
 def init():
     with conn() as c:
         c.executescript(SCHEMA)
+        cols = {r[1] for r in c.execute("PRAGMA table_info(agent_tasks)")}
+        if "act_json" not in cols:  # databases created before Darwin Act support
+            c.execute("ALTER TABLE agent_tasks ADD COLUMN act_json TEXT")
         if c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
             for u in json.loads((config.SEED_DIR / "team.json").read_text()):
                 c.execute(
                     "INSERT INTO users VALUES (?,?,?,?,?,?)",
                     (u["handle"], u["name"], u["role"], u.get("email"), u.get("slack_user_id"), u.get("github")),
                 )
+        # Private contact details (emails) live outside git: the repo is public.
+        contacts = config.DATA_DIR / "team_contacts.json"
+        if contacts.exists():
+            for handle, fields in json.loads(contacts.read_text()).items():
+                for col in ("email", "slack_user_id", "github"):
+                    if col in fields:
+                        c.execute(f"UPDATE users SET {col} = ? WHERE handle = ?", (fields[col], handle))
         prev = json.loads((config.SEED_DIR / "previous_meeting.json").read_text())
         c.execute(
             "INSERT OR IGNORE INTO meetings (id, title, date, source, goals_json) VALUES (?,?,?,?,?)",

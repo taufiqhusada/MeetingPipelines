@@ -1,11 +1,11 @@
 {
   "id": "sync-2026-10-04",
-  "title": "Meeting Agent weekly sync",
+  "title": "MeetingPipelines weekly sync",
   "date": "2026-10-04",
   "goals": [
-    {"goal": "Before agent pulls GitHub commits for each engineer", "owner": "alex"},
-    {"goal": "Slack bot can post to the team channel and DM engineers", "owner": "priya"},
-    {"goal": "Transcript ingestion prototype for the After agent", "owner": "jordan"},
-    {"goal": "Pick the LLM provider for all agents", "owner": "sam"}
+    {"goal": "Before stage gathers GitHub, Drive and coding-agent logs into a brief", "owner": "taufiq"},
+    {"goal": "Slack bot can post to a channel and DM teammates", "owner": "michael"},
+    {"goal": "After stage turns a transcript into tasks", "owner": "george"},
+    {"goal": "Choose how live meeting transcripts are captured", "owner": "george"}
   ]
 }

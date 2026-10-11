@@ -9,12 +9,40 @@ from . import config
 from .schemas import Transcript, TranscriptLine
 
 _LINE = re.compile(r"^\s*(?:\[?[\d:.]+\]?\s*)?([^:]{1,40}):\s*(.+)$")
+_VTT_TIME = re.compile(r"^(\d+):(\d\d):(\d\d)[.,](\d+)\s*-->")
+_VTT_VOICE = re.compile(r"^<v\s+([^>]+)>(.*?)(?:</v>)?$")
+
+
+def _parse_vtt(text: str) -> list[TranscriptLine]:
+    """WebVTT / SRT cues. Speakers come from <v Name> tags or a "Name: text" prefix."""
+    lines, t = [], None
+    for raw in text.splitlines():
+        raw = raw.strip()
+        if not raw or raw == "WEBVTT" or raw.startswith("NOTE") or raw.isdigit():
+            continue
+        if m := _VTT_TIME.match(raw):
+            h, mnt, sec, _ = m.groups()
+            t = int(h) * 3600 + int(mnt) * 60 + int(sec)
+            continue
+        if m := _VTT_VOICE.match(raw):
+            speaker, words = m.group(1).strip(), m.group(2).strip()
+        elif m := _LINE.match(raw):
+            speaker, words = m.group(1).strip(), m.group(2).strip()
+        else:
+            speaker, words = (lines[-1].speaker if lines else "Unknown"), raw
+        if lines and lines[-1].speaker == speaker and lines[-1].t == t:
+            lines[-1].text += " " + words
+        else:
+            lines.append(TranscriptLine(speaker=speaker, text=words, t=t))
+    return lines
 
 
 def from_text(text: str, meeting_id: str, title: str = "Team sync", day: str | None = None) -> Transcript:
-    """Parse "Speaker: words" lines. Lines without a speaker are appended to the previous line."""
+    """Parse "Speaker: words" lines (or a WebVTT/SRT file). Lines without a speaker join the previous line."""
     lines: list[TranscriptLine] = []
-    for raw in text.splitlines():
+    if text.lstrip().startswith("WEBVTT") or "-->" in text:
+        lines = _parse_vtt(text)
+    for raw in ([] if lines else text.splitlines()):
         if not raw.strip():
             continue
         m = _LINE.match(raw)

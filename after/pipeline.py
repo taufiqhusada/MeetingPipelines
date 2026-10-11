@@ -1,6 +1,7 @@
 """After-meeting pipeline: analyze -> store -> deliver human tasks -> queue agent tasks for approval."""
 import json
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 from . import config, db, executors, report
 from .analyze import analyze
@@ -93,11 +94,12 @@ def process(transcript: Transcript) -> dict:
     )
 
     # Agent tasks: wait for approval. Darwin search shows which external agent could take each one.
-    for t in a["agent_tasks"]:
+    with ThreadPoolExecutor() as pool:
+        matches = list(pool.map(lambda t: executors.darwin_search(t["capability_query"]), a["agent_tasks"]))
+    for t, darwin in zip(a["agent_tasks"], matches):
         db.execute(
             "INSERT INTO agent_tasks (meeting_id, title, kind, payload_json, darwin_json) VALUES (?,?,?,?,?)",
-            mid, t["title"], t["kind"], json.dumps(t),
-            json.dumps(executors.darwin_search(t["capability_query"])),
+            mid, t["title"], t["kind"], json.dumps(t), json.dumps(darwin),
         )
     return get_meeting(mid)
 
@@ -113,10 +115,16 @@ def decide(task_id: int, approve: bool) -> dict:
     mid, task = row["meeting_id"], json.loads(row["payload_json"])
     if row["kind"] == "schedule_meeting":
         result = executors.schedule_meeting(mid, task)
+        if result.get("ics"):
+            executors.slack_message(
+                mid, f"Next meeting: *{task['title']}* at {result['start']}. Invite attached.",
+                files=[str(config.ROOT / result["ics"].lstrip("/"))],
+            )
     elif row["kind"] == "meeting_report":
         url = report.build(get_meeting(mid))
         result = {"ok": True, "report": url}
-        executors.slack_message(mid, f"Meeting report is ready: {config.BASE_URL}{url}")
+        executors.slack_message(mid, "Meeting report attached (open in a browser).",
+                                files=[str(config.ROOT / url.lstrip("/"))])
     else:
         # No built-in executor (e.g. purchases): hand the Darwin matches to the requester.
         darwin = json.loads(row["darwin_json"] or "{}")
@@ -128,6 +136,40 @@ def decide(task_id: int, approve: bool) -> dict:
         result = {"ok": True, "detail": "Routed to a human with Darwin's agent matches (no auto-execution)."}
     db.execute("UPDATE agent_tasks SET approval='approved', result_json=? WHERE id=?", json.dumps(result), task_id)
     return get_meeting(mid)
+
+
+def run_via_darwin(task_id: int, agent_id: str) -> dict:
+    """Approve an agent task by handing it to a Darwin agent (Act). Pending auth/payment stays with the human."""
+    row = db.rows("SELECT * FROM agent_tasks WHERE id = ?", task_id)[0]
+    if row["approval"] != "pending":
+        raise RuntimeError(f"Task already {row['approval']}")
+    task, darwin = json.loads(row["payload_json"]), json.loads(row["darwin_json"] or "{}")
+    message = (f"{task['title']}. {task['details']}\n"
+               f"Context: requested in the meeting \"{row['meeting_id']}\": \"{task['source_quote']}\".\n"
+               "Please confirm the requirements first. Do not make any purchase or payment without explicit approval.")
+    act = executors.darwin_act_start(darwin, agent_id, message, idempotency_key=f"{row['meeting_id']}-{task_id}-{agent_id}")
+    result = {"ok": True, "detail": f"Started a Darwin Act thread with {agent_id}", "via": "darwin"}
+    db.execute("UPDATE agent_tasks SET approval='approved', result_json=?, act_json=? WHERE id=?",
+               json.dumps(result), json.dumps(act), task_id)
+    executors.slack_message(row["meeting_id"], f"Approved: *{task['title']}*, handed to a Darwin agent. "
+                            "Any login or payment request will need a human.", task.get("requested_by"))
+    return get_meeting(row["meeting_id"])
+
+
+def refresh_darwin(task_id: int) -> dict:
+    row = db.rows("SELECT * FROM agent_tasks WHERE id = ?", task_id)[0]
+    act = json.loads(row["act_json"] or "{}")
+    req_id = act.get("actRequestId") or act.get("id")
+    if not req_id:
+        raise RuntimeError("No Darwin Act request for this task")
+    db.execute("UPDATE agent_tasks SET act_json=? WHERE id=?",
+               json.dumps({**act, "latest": executors.darwin_act_get(req_id)}), task_id)
+    return get_meeting(row["meeting_id"])
+
+
+def _public_darwin(d: dict | None) -> dict | None:
+    """The searchToken authorizes follow-ups on our search; never send it to the browser."""
+    return {k: v for k, v in d.items() if k != "searchToken"} if d else d
 
 
 def get_meeting(meeting_id: str) -> dict:
@@ -147,7 +189,7 @@ def get_meeting(meeting_id: str) -> dict:
         ],
         "agent_tasks": [
             {**t, "payload": loads(t.pop("payload_json")), "result": loads(t.pop("result_json")),
-             "darwin": loads(t.pop("darwin_json"))}
+             "darwin": _public_darwin(loads(t.pop("darwin_json"))), "act": loads(t.pop("act_json"))}
             for t in db.rows("SELECT * FROM agent_tasks WHERE meeting_id=? ORDER BY id", meeting_id)
         ],
         "outbox": db.rows("SELECT * FROM outbox WHERE meeting_id=? ORDER BY id", meeting_id),

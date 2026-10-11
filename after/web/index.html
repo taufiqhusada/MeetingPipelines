@@ -34,7 +34,8 @@
   <div class="card">
     <h2>1 · Transcript</h2>
     <div class="row"><button onclick="runDemo()">Run demo meeting</button></div>
-    <p class="muted">Or paste <code>Speaker: text</code> lines:</p>
+    <p class="muted">Or paste <code>Speaker: text</code> lines / a .vtt file, or load a sample:</p>
+    <div class="row" style="margin:0 0 8px"><select id="sample" style="flex:1;padding:7px;border-radius:6px"></select><button class="ghost" onclick="loadSample()">Load sample</button></div>
     <input id="mid" placeholder="meeting id, e.g. sync-2026-10-18">
     <textarea id="text" placeholder="Sam: Let's start..."></textarea>
     <div class="row"><button onclick="runText()">Process transcript</button></div>
@@ -72,8 +73,21 @@ async function botStatus() { $("botout").textContent = JSON.stringify(await api(
 const botProcess = () => loading(api(`/api/recall/bots/${$("botid").value}/process`, { method: "POST" }));
 const who = (h) => h ? esc(team[h] || h) : "<span class='pill flag'>UNASSIGNED</span>";
 
+let prompts = {}, actEnabled = false;
+async function copyPrompt(agentId) {
+  await navigator.clipboard.writeText(prompts[agentId] || "");
+  $("err").textContent = ""; alert("Darwin connection prompt copied. Paste it into an AI client with Darwin MCP connected.");
+}
+const runDarwin = (id, agentId) => {
+  if (!confirm("Hand this task to the Darwin agent? Logins or payments will still need your approval.")) return;
+  api(`/api/agent-tasks/${id}/darwin`, { method: "POST", body: JSON.stringify({ agent_id: agentId }) }).then(render);
+};
+const refreshDarwin = (id) => api(`/api/agent-tasks/${id}/darwin/refresh`, { method: "POST" }).then(render);
+
 function render(m) {
   team = Object.fromEntries(m.team.map((u) => [u.handle, u.name]));
+  actEnabled = !m.flags.some((f) => f.key === "DARWIN_API_KEY");
+  prompts = Object.fromEntries(m.agent_tasks.flatMap((t) => (t.darwin?.agents || []).map((d) => [d.agentId, d.connectionPrompt])));
   history.replaceState(null, "", "?meeting=" + encodeURIComponent(m.id));
   renderFlags(m.flags);
   const a = m.analysis;
@@ -96,7 +110,13 @@ function render(m) {
       <div class="quote">${esc(t.payload.source_quote)}</div>
       ${t.payload.start_datetime ? `<div>🗓 ${esc(t.payload.start_datetime)} · ${t.payload.duration_minutes} min · ${t.payload.attendees.map(who).join(", ")}</div>` : ""}
       <div class="muted" style="margin-top:6px">Darwin agents for “${esc(t.darwin?.query)}”:</div>
-      <ul>${(t.darwin?.agents || []).map((d) => `<li><b>${esc(d.name)}</b> <span class="muted">(${esc(d.readiness)})</span> ${esc(d.description)}</li>`).join("") || `<li class="muted">${esc(t.darwin?.error || "none")}</li>`}</ul>
+      <ul>${(t.darwin?.agents || []).map((d) => `<li><b>${esc(d.name)}</b>
+        <span class="pill ${d.canStartThread ? "approved" : "rejected"}">${d.canStartThread ? "startable" : "not startable"}</span>
+        <span class="muted">${esc(d.description)}</span>
+        <div class="row" style="margin-top:4px">${d.connectionPrompt ? `<button class="ghost" onclick="copyPrompt('${esc(d.agentId)}')">Copy prompt for AI client</button>` : ""}
+        ${t.approval === "pending" && d.canStartThread && actEnabled ? `<button onclick="runDarwin(${t.id},'${esc(d.agentId)}')">Run via Darwin</button>` : ""}</div></li>`).join("") || `<li class="muted">${esc(t.darwin?.error || "none")}</li>`}</ul>
+      ${t.darwin?.error && t.darwin?.agents?.length ? `<div class="muted">Darwin asks: ${esc(t.darwin.error)}</div>` : ""}
+      ${t.act ? `<div class="card"><b>Darwin Act</b> <button class="ghost" onclick="refreshDarwin(${t.id})">Refresh status</button><pre>${esc(JSON.stringify(t.act.latest || t.act, null, 1).slice(0, 1500))}</pre></div>` : ""}
       ${t.approval === "pending" ? `<div class="row"><button onclick="decide(${t.id},'approve')">Approve & run</button><button class="ghost" onclick="decide(${t.id},'reject')">Reject</button></div>` : ""}
       ${t.result ? `<div class="row">${t.result.report ? `<a href="${esc(t.result.report)}" target="_blank">Open report</a>` : ""}${t.result.ics ? `<a href="${esc(t.result.ics)}">Download invite (.ics)</a>` : ""}<span class="muted">${esc(t.result.detail || (t.result.calendar ? "calendar: " + t.result.calendar.detail : ""))}</span></div>` : ""}
     </div>`).join("")}</div>
@@ -108,8 +128,17 @@ function renderFlags(flags) {
   $("flags").innerHTML = flags.length ? "<h2>⚠️ Setup flags</h2><ul>" + flags.map((f) => `<li><b>${esc(f.key)}</b>: ${esc(f.impact)}</li>`).join("") + "</ul>" : "<b>All integrations configured.</b>";
 }
 
+let samples = [];
+function loadSample() {
+  const s = samples.find((x) => x.name === $("sample").value); if (!s) return;
+  $("text").value = s.text;
+  $("mid").value = s.name.replace(/\.[^.]+$/, "") + "-" + new Date().toISOString().slice(0, 10);
+}
+
 (async () => {
   const s = await api("/api/status"); renderFlags(s.flags);
+  samples = await api("/api/samples");
+  $("sample").innerHTML = samples.map((x) => `<option>${esc(x.name)}</option>`).join("");
   const id = new URLSearchParams(location.search).get("meeting");
   if (id) loading(api("/api/meetings/" + encodeURIComponent(id)));
 })();
