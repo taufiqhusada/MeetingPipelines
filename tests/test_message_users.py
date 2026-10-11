@@ -1,0 +1,19 @@
+"""Send a test message to the requested Slack users."""
+
+import sys
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from src.slack.messaging import send_message
+
+
+if __name__ == "__main__":
+    test_file = Path(__file__).parent / "artifacts" / "hi.txt"
+    send_message(
+        recipients=["pham_michael", "georgezhou1010", "taufiq.daryanto"],
+        text="hi",
+        files=[test_file],
+    )
