@@ -1,6 +1,11 @@
+.env
+credentials.json
+token.json
+/runs/
+/transcripts/
 .venv/
 __pycache__/
-.env
+*.pyc
 after/data/
 after/output/
 .DS_Store

@@ -1,0 +1,41 @@
+WEBVTT
+
+1
+00:00:02.000 --> 00:00:09.000
+<v Taufiq>Design review for Meeting Pipelines. Quick status first.
+
+2
+00:00:09.500 --> 00:00:21.000
+<v Taufiq>The Claude Code and Codex log connectors work on real sessions. GitHub, Gmail and Drive connectors are written, with Drive using the LLM to pick relevant files from the whole Drive.
+
+3
+00:00:21.500 --> 00:00:30.000
+<v Michael>For Slack, I haven't started coding. I'm still reading the Slack Bolt docs. Monday is tight.
+
+4
+00:00:30.500 --> 00:00:38.000
+<v George>The after-meeting spec isn't in Drive yet, sorry. I'll finish it by Saturday.
+
+5
+00:00:38.500 --> 00:00:50.000
+<v Taufiq>On the open question: let's start with a shared folder for aggregation, and move to a Slack channel once Michael's bot can read messages.
+
+6
+00:00:50.500 --> 00:01:02.000
+<v Michael>Fine with me. For auth, can we use one Google OAuth app and one GitHub App for the whole team? Then everyone just clicks connect.
+
+7
+00:01:02.500 --> 00:01:10.000
+<v Taufiq>Yes, I'll build the connect page and the one-click GitHub App setup.
+
+8
+00:01:10.500 --> 00:01:20.000
+<v George>Do we need Google verification? Gmail read-only is a restricted scope.
+
+9
+00:01:20.500 --> 00:01:30.000
+<v Taufiq>For the hackathon, Testing mode with us as test users is enough. Let's not block on verification.
+
+10
+00:01:30.500 --> 00:01:38.000
+<v Michael>Action items: Michael Slack bot, George after-meeting spec, Taufiq connect page and a full end-to-end demo run.
