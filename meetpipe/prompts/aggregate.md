@@ -10,8 +10,28 @@ Do:
   contradicting statuses) under `dependencies_and_conflicts`.
 - Keep owners. Never invent facts or IDs; only use evidence IDs present in the input.
 
-Return ONLY a JSON object with the same shape as the inputs plus one extra key:
+Also produce the Slack view the team actually reads, in exactly this shape:
+- `team_goal`: ONE sentence: what the team is trying to achieve right now (from specs, milestones, goals).
+- `people`: one entry per teammate.
+  - A brief labelled with a teammate's worker id (e.g. "taufik") describes that person's own coding
+    sessions, so its work belongs to them unless an owner says otherwise. Work in the "shared" brief
+    belongs to whoever is named as owner/author.
+  - Use these display names, merging aliases into one person: {people}
+  - progress = finished since last meeting; wip = in progress now (prefix "Blocked: " if stuck);
+    next = their next step before/at the meeting.
+  - At most 3 items per bucket; each one short line (max ~15 words), concrete (PR #, file, feature),
+    no filler. Leave a bucket empty rather than padding it.
+- `meeting_goals`: what this meeting must decide, max 4, each phrased as a decision
+  ("Decide who owns brief aggregation", "Pick Fireflies vs Recall"). Include unowned work and conflicts here.
+
+Return ONLY a JSON object with the same shape as the inputs plus these extra keys:
 {
+  "team_goal": "...",
+  "people": [{"name": "Taufiq",
+              "progress": [{"text": "...", "evidence": ["label:ID"]}],
+              "wip":      [{"text": "...", "evidence": []}],
+              "next":     [{"text": "...", "evidence": []}]}],
+  "meeting_goals": [{"text": "Decide ...", "evidence": []}],
   "headline": "...",
   "progress": [{"summary": "...", "evidence": ["label:ID"]}],
   "commitments": [{"what": "...", "owner": "...", "due": "...", "made_in": "label:ID", "status": "...", "evidence": []}],
