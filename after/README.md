@@ -24,6 +24,17 @@ transcript (paste / JSON / Recall.ai bot)
    app.py + web/     FastAPI + one-page UI
 ```
 
+## Live Google Meet transcripts (free): TranscripTonic
+
+[TranscripTonic](https://github.com/vivek-nexus/transcriptonic) is a free, open-source Chrome extension that saves
+Google Meet transcripts from Meet's own captions (speaker names included) and POSTs them to a webhook the moment the
+meeting ends. No bot, no account, works with personal Gmail.
+
+1. Install it from the Chrome Web Store and join meetings in Chrome (it turns captions on itself).
+2. Extension → **Set up webhooks**: URL `http://localhost:8000/api/webhooks/transcriptonic`, body **Advanced**,
+   tick **auto-post after meeting**, Save (Chrome asks for permission to reach that URL).
+3. Keep the After server running. When the call ends, the meeting shows up at `http://localhost:8000` about 30s later.
+
 ## Run
 
 ```bash

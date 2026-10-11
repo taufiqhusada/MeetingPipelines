@@ -1,7 +1,8 @@
 """Transcript sources: pasted text, JSON upload, or a Recall.ai meeting bot."""
 import json
 import re
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -64,6 +65,62 @@ def from_text(text: str, meeting_id: str, title: str = "Team sync", day: str | N
 def from_json(payload: str | dict) -> Transcript:
     data = json.loads(payload) if isinstance(payload, str) else payload
     return Transcript.model_validate(data)
+
+
+# ---------------------------------------------------------------- TranscripTonic
+# Free, open-source Chrome extension that saves Google Meet transcripts from Meet's own captions and POSTs them
+# to a webhook when the meeting ends. Body: {meetingTitle, meetingStartTimestamp, transcript, chatMessages}; with
+# the "advanced" body, transcript is [{personName, timestamp, transcriptText}].
+
+_SIMPLE_BLOCK = re.compile(r"^(.+?) \(([^()]*)\)$")
+
+
+def _simple_blocks(text: str) -> list[tuple[str, str]]:
+    """Simple body: "Name (TIME)\ntext\n\n" blocks."""
+    out = []
+    for block in re.split(r"\n\s*\n", text or ""):
+        head, _, body = block.strip().partition("\n")
+        if m := _SIMPLE_BLOCK.match(head.strip()):
+            out.append((m.group(1).strip(), body.strip()))
+    return out
+
+
+def from_transcriptonic(body: dict) -> Transcript:
+    title = (body.get("meetingTitle") or "Google Meet").strip()
+    start = body.get("meetingStartTimestamp") or ""
+    try:
+        started = datetime.fromisoformat(start.replace("Z", "+00:00")).astimezone(ZoneInfo(config.TIMEZONE))
+    except ValueError:  # simple body uses a locale-formatted timestamp
+        started = datetime.now(ZoneInfo(config.TIMEZONE))
+
+    def seconds(ts: str | None) -> float | None:
+        try:
+            return (datetime.fromisoformat(ts.replace("Z", "+00:00")) - started).total_seconds()
+        except (AttributeError, ValueError, TypeError):
+            return None
+
+    lines: list[TranscriptLine] = []
+    transcript, chat = body.get("transcript") or [], body.get("chatMessages") or []
+    if isinstance(transcript, list):
+        lines += [TranscriptLine(speaker=b.get("personName") or "Unknown", text=b.get("transcriptText", ""),
+                                 t=seconds(b.get("timestamp"))) for b in transcript if b.get("transcriptText")]
+        lines += [TranscriptLine(speaker=f"{c.get('personName') or 'Unknown'} (chat)", text=c.get("chatMessageText", ""),
+                                 t=seconds(c.get("timestamp"))) for c in chat if c.get("chatMessageText")]
+        lines.sort(key=lambda l: l.t if l.t is not None else 0)
+    else:
+        lines += [TranscriptLine(speaker=n, text=t) for n, t in _simple_blocks(transcript) if t]
+        lines += [TranscriptLine(speaker=f"{n} (chat)", text=t) for n, t in _simple_blocks(chat) if t]
+    if not lines:
+        raise RuntimeError("TranscripTonic sent an empty transcript (were Google Meet captions on?)")
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40] or "meet"
+    return Transcript(
+        meeting_id=f"{slug}-{started.strftime('%Y%m%d-%H%M')}",
+        title=title,
+        date=started.date().isoformat(),
+        attendees=sorted({l.speaker.removesuffix(" (chat)") for l in lines}),
+        lines=lines,
+        source="transcriptonic",
+    )
 
 
 def demo() -> Transcript:

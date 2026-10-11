@@ -1,5 +1,5 @@
 """FastAPI server for the After stage.  Run: uvicorn after.app:app --reload"""
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -90,6 +90,23 @@ def decide(task_id: int, decision: str):
     if decision not in ("approve", "reject"):
         raise HTTPException(400, "decision must be approve or reject")
     return _run(pipeline.decide, task_id, decision == "approve")
+
+
+# TranscripTonic (Chrome extension for Google Meet) posts here when a meeting ends.
+# Extension settings -> "Set up webhooks": URL http://localhost:8000/api/webhooks/transcriptonic, body type "Advanced".
+@app.post("/api/webhooks/transcriptonic", status_code=202)
+def transcriptonic_webhook(body: dict, background: BackgroundTasks):
+    transcript = _run(transcripts.from_transcriptonic, body)
+    background.add_task(_process_quietly, transcript)  # analysis takes ~40s; answer the extension right away
+    return {"accepted": True, "meeting_id": transcript.meeting_id, "lines": len(transcript.lines),
+            "view": f"{config.BASE_URL}/?meeting={transcript.meeting_id}"}
+
+
+def _process_quietly(transcript):
+    try:
+        pipeline.process(transcript)
+    except Exception as e:  # nobody is waiting on this request; log for the server console
+        print(f"[transcriptonic] processing {transcript.meeting_id} failed: {e}", flush=True)
 
 
 # Recall.ai: send a bot to a live meeting, then process its transcript once the call ends.

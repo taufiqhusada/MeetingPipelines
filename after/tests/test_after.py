@@ -297,3 +297,47 @@ def test_same_day_meeting_compares_against_earlier_one(demo_meeting):
     assert [g["goal"] for g in goals] == demo_meeting["analysis"]["next_meeting_goals"]
     # a meeting never compares against itself
     assert db.previous_goals("2026-10-11", "sync-2026-10-11")[0]["goal"].startswith("Before stage gathers")
+
+
+# ---------------------------------------------------------------- TranscripTonic
+
+ADVANCED = {
+    "webhookBodyType": "advanced", "meetingSoftware": "Google Meet", "meetingTitle": "Weekly Sync",
+    "meetingStartTimestamp": "2026-10-11T21:00:00.000Z", "meetingEndTimestamp": "2026-10-11T21:30:00.000Z",
+    "transcript": [
+        {"personName": "George Zhou", "timestamp": "2026-10-11T21:00:05.000Z", "transcriptText": "Let's start."},
+        {"personName": "Michael Pham", "timestamp": "2026-10-11T21:00:20.000Z", "transcriptText": "Slack works."},
+    ],
+    "chatMessages": [{"personName": "Taufiq", "timestamp": "2026-10-11T21:00:10.000Z", "chatMessageText": "link?"}],
+}
+
+
+def test_transcriptonic_advanced_body():
+    t = transcripts.from_transcriptonic(ADVANCED)
+    assert t.meeting_id == "weekly-sync-20261011-1400" and t.date == "2026-10-11"  # 21:00Z = 2pm Pacific
+    assert [(l.speaker, l.t) for l in t.lines] == [("George Zhou", 5), ("Taufiq (chat)", 10), ("Michael Pham", 20)]
+    assert t.source == "transcriptonic" and t.attendees == ["George Zhou", "Michael Pham", "Taufiq"]
+
+
+def test_transcriptonic_simple_body():
+    body = {"webhookBodyType": "simple", "meetingTitle": "Sync", "meetingStartTimestamp": "OCT 11, 2026, 2:00 PM",
+            "transcript": "George Zhou (OCT 11, 2026, 2:00 PM)\nLet's start.\n\nMichael Pham (OCT 11, 2026, 2:01 PM)\nSlack works.\n\n",
+            "chatMessages": ""}
+    t = transcripts.from_transcriptonic(body)
+    assert [(l.speaker, l.text) for l in t.lines] == [("George Zhou", "Let's start."), ("Michael Pham", "Slack works.")]
+
+
+def test_transcriptonic_empty_is_rejected():
+    with pytest.raises(RuntimeError, match="captions"):
+        transcripts.from_transcriptonic({**ADVANCED, "transcript": [], "chatMessages": []})
+
+
+def test_transcriptonic_webhook_endpoint(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from after import app as app_module
+    processed = []
+    monkeypatch.setattr(app_module.pipeline, "process", lambda t: processed.append(t.meeting_id))
+    r = TestClient(app_module.app).post("/api/webhooks/transcriptonic", json=ADVANCED)
+    assert r.status_code == 202 and r.json()["lines"] == 3
+    assert processed == ["weekly-sync-20261011-1400"]

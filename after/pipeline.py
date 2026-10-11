@@ -47,13 +47,6 @@ def process(transcript: Transcript) -> dict:
     # Re-processing a meeting replaces its previous output.
     for table in ("human_tasks", "agent_tasks", "outbox"):
         db.execute(f"DELETE FROM {table} WHERE meeting_id = ?", mid)
-    db.execute(
-        "INSERT OR REPLACE INTO meetings (id, title, date, source, transcript_json, analysis_json, goals_json) "
-        "VALUES (?,?,?,?,?,?,?)",
-        mid, transcript.title, transcript.date, transcript.source, transcript.model_dump_json(),
-        json.dumps({**a, "engine": engine}),
-        json.dumps([{"goal": g, "owner": None} for g in a["next_meeting_goals"]]),
-    )
 
     # Human tasks: store, then route to GitHub (engineering) or Slack DM (everything else).
     human = a["human_tasks"] + _due_date_followups(a["human_tasks"])
@@ -101,6 +94,14 @@ def process(transcript: Transcript) -> dict:
             "INSERT INTO agent_tasks (meeting_id, title, kind, payload_json, darwin_json) VALUES (?,?,?,?,?)",
             mid, t["title"], t["kind"], json.dumps(t), json.dumps(darwin),
         )
+    # Saved last, so a meeting only appears (UI, webhook pollers) once all its tasks exist.
+    db.execute(
+        "INSERT OR REPLACE INTO meetings (id, title, date, source, transcript_json, analysis_json, goals_json) "
+        "VALUES (?,?,?,?,?,?,?)",
+        mid, transcript.title, transcript.date, transcript.source, transcript.model_dump_json(),
+        json.dumps({**a, "engine": engine}),
+        json.dumps([{"goal": g, "owner": None} for g in a["next_meeting_goals"]]),
+    )
     return get_meeting(mid)
 
 
