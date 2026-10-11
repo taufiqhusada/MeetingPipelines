@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting Agent: After</title>
+<style>
+  :root { --bg:#fff; --fg:#1f2328; --muted:#656d76; --card:#f6f8fa; --line:#d0d7de; --accent:#4c6ef5; --ok:#2f9e44; --warn:#f08c00; --bad:#e03131; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8b949e; --card:#161b22; --line:#30363d; --accent:#748ffc; } }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--fg); font:14px/1.5 system-ui, sans-serif; margin:0; padding:20px 16px; max-width:1100px; margin-inline:auto; }
+  h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:15px; margin:0 0 10px; }
+  .muted { color:var(--muted); } .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:7px 12px; cursor:pointer; font:inherit; }
+  button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); }
+  textarea, input { width:100%; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; }
+  textarea { min-height:110px; } .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .pill { display:inline-block; border-radius:99px; padding:0 8px; font-size:12px; color:#fff; background:var(--muted); }
+  .achieved,.approved { background:var(--ok); } .partial,.pending { background:var(--warn); } .not_started,.rejected,.dropped { background:var(--bad); }
+  .flag { background:var(--bad); } .table { width:100%; border-collapse:collapse; overflow-x:auto; display:block; }
+  .table td, .table th { text-align:left; padding:6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .quote { color:var(--muted); font-style:italic; } ul { margin:0; padding-left:18px; }
+  pre { white-space:pre-wrap; margin:0; font-size:12px; } #err { color:var(--bad); }
+</style>
+</head>
+<body>
+<h1>Meeting Agent: After</h1>
+<p class="muted">Transcript in → summary, progress vs. last meeting, human tasks routed, agent tasks awaiting approval.</p>
+
+<div id="flags" class="card"></div>
+
+<div class="grid">
+  <div class="card">
+    <h2>1 · Transcript</h2>
+    <div class="row"><button onclick="runDemo()">Run demo meeting</button></div>
+    <p class="muted">Or paste <code>Speaker: text</code> lines:</p>
+    <input id="mid" placeholder="meeting id, e.g. sync-2026-10-18">
+    <textarea id="text" placeholder="Sam: Let's start..."></textarea>
+    <div class="row"><button onclick="runText()">Process transcript</button></div>
+  </div>
+  <div class="card">
+    <h2>Recall.ai live meeting</h2>
+    <input id="murl" placeholder="https://meet.google.com/abc-defg-hij">
+    <div class="row"><button onclick="sendBot()">Send bot to meeting</button></div>
+    <input id="botid" placeholder="bot id" style="margin-top:8px">
+    <div class="row"><button class="ghost" onclick="botStatus()">Check status</button><button onclick="botProcess()">Process transcript</button></div>
+    <pre id="botout" class="muted"></pre>
+  </div>
+</div>
+<p id="err"></p>
+<div id="out"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let team = {};
+
+async function api(path, opts = {}) {
+  $("err").textContent = "";
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  const data = await r.json();
+  if (!r.ok) { $("err").textContent = data.detail || r.statusText; throw new Error(data.detail); }
+  return data;
+}
+async function loading(p) { $("out").innerHTML = "<p class='muted'>Working… (Claude + Darwin calls take a few seconds)</p>"; try { render(await p); } catch (e) { $("out").innerHTML = ""; } }
+const runDemo = () => loading(api("/api/process/demo", { method: "POST" }));
+const runText = () => loading(api("/api/process/text", { method: "POST", body: JSON.stringify({ text: $("text").value, meeting_id: $("mid").value || "meeting-" + Date.now() }) }));
+const decide = (id, d) => api(`/api/agent-tasks/${id}/${d}`, { method: "POST" }).then(render);
+async function sendBot() { const b = await api("/api/recall/bots", { method: "POST", body: JSON.stringify({ meeting_url: $("murl").value }) }); $("botid").value = b.id; $("botout").textContent = "Bot " + b.id + " sent."; }
+async function botStatus() { $("botout").textContent = JSON.stringify(await api(`/api/recall/bots/${$("botid").value}`), null, 1); }
+const botProcess = () => loading(api(`/api/recall/bots/${$("botid").value}/process`, { method: "POST" }));
+const who = (h) => h ? esc(team[h] || h) : "<span class='pill flag'>UNASSIGNED</span>";
+
+function render(m) {
+  team = Object.fromEntries(m.team.map((u) => [u.handle, u.name]));
+  history.replaceState(null, "", "?meeting=" + encodeURIComponent(m.id));
+  renderFlags(m.flags);
+  const a = m.analysis;
+  $("out").innerHTML = `
+  <div class="card"><h2>${esc(m.title)} · ${esc(m.date)} <span class="muted">(${esc(a.engine)})</span></h2><p>${esc(a.summary)}</p></div>
+  <div class="grid">
+    <div class="card"><h2>Last meeting's goals → now</h2><ul>${a.goal_progress.map((g) =>
+      `<li><span class="pill ${g.status}">${g.status.replace("_", " ")}</span> ${esc(g.goal)} <span class="muted">· ${who(g.owner)}</span><br><span class="quote">${esc(g.evidence)}</span></li>`).join("")}</ul></div>
+    <div class="card"><h2>Decisions</h2><ul>${a.decisions.map((d) => `<li><b>${esc(d.decision)}</b><br><span class="muted">${esc(d.rationale)}</span></li>`).join("")}</ul>
+      <h2 style="margin-top:12px">Open questions</h2><ul>${a.open_questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul></div>
+  </div>
+  <div class="card"><h2>Per-person progress</h2><div class="grid">${a.person_updates.map((p) => `
+    <div><b>${who(p.person)}</b><ul>${p.done.map((x) => `<li>✅ ${esc(x)}</li>`).join("")}${p.next.map((x) => `<li>➡️ ${esc(x)}</li>`).join("")}${p.blockers.map((x) => `<li>⛔ ${esc(x)}</li>`).join("")}</ul></div>`).join("")}</div></div>
+  <div class="card"><h2>Human tasks</h2><table class="table"><tr><th>Task</th><th>Owner / role</th><th>Due</th><th>Status</th><th>Sent to</th></tr>${m.human_tasks.map((t) => `
+    <tr><td>${esc(t.title)}<br><span class="quote">${esc(t.source_quote)}</span></td><td>${who(t.owner)}<br><span class="muted">${esc(t.project_role || "")}</span></td>
+    <td>${t.due_date ? esc(t.due_date) : t.flags.includes("no_due_date") ? "<span class='pill flag'>no due date</span>" : "—"}</td><td>${esc(t.status)}</td>
+    <td>${esc(t.channel)} · ${t.delivery?.sent ? "✅ " + esc(t.delivery.detail) : "<span class='muted'>" + esc(t.delivery?.detail) + "</span>"}</td></tr>`).join("")}</table></div>
+  <div class="card"><h2>Agent tasks (need approval)</h2>${m.agent_tasks.map((t) => `
+    <div class="card"><b>${esc(t.title)}</b> <span class="pill">${esc(t.kind)}</span> <span class="pill ${t.approval}">${t.approval}</span>
+      <div class="quote">${esc(t.payload.source_quote)}</div>
+      ${t.payload.start_datetime ? `<div>🗓 ${esc(t.payload.start_datetime)} · ${t.payload.duration_minutes} min · ${t.payload.attendees.map(who).join(", ")}</div>` : ""}
+      <div class="muted" style="margin-top:6px">Darwin agents for “${esc(t.darwin?.query)}”:</div>
+      <ul>${(t.darwin?.agents || []).map((d) => `<li><b>${esc(d.name)}</b> <span class="muted">(${esc(d.readiness)})</span> ${esc(d.description)}</li>`).join("") || `<li class="muted">${esc(t.darwin?.error || "none")}</li>`}</ul>
+      ${t.approval === "pending" ? `<div class="row"><button onclick="decide(${t.id},'approve')">Approve & run</button><button class="ghost" onclick="decide(${t.id},'reject')">Reject</button></div>` : ""}
+      ${t.result ? `<div class="row">${t.result.report ? `<a href="${esc(t.result.report)}" target="_blank">Open report</a>` : ""}${t.result.ics ? `<a href="${esc(t.result.ics)}">Download invite (.ics)</a>` : ""}<span class="muted">${esc(t.result.detail || (t.result.calendar ? "calendar: " + t.result.calendar.detail : ""))}</span></div>` : ""}
+    </div>`).join("")}</div>
+  <div class="card"><h2>Outbox (${m.outbox.filter((o) => o.sent).length} sent / ${m.outbox.length})</h2><table class="table"><tr><th>Channel</th><th>To</th><th>Message</th><th>Result</th></tr>${m.outbox.map((o) => `
+    <tr><td>${esc(o.channel)}</td><td>${esc(o.target)}</td><td><pre>${esc(o.body)}</pre></td><td>${o.sent ? "✅" : ""} ${esc(o.detail)}</td></tr>`).join("")}</table></div>`;
+}
+
+function renderFlags(flags) {
+  $("flags").innerHTML = flags.length ? "<h2>⚠️ Setup flags</h2><ul>" + flags.map((f) => `<li><b>${esc(f.key)}</b>: ${esc(f.impact)}</li>`).join("") + "</ul>" : "<b>All integrations configured.</b>";
+}
+
+(async () => {
+  const s = await api("/api/status"); renderFlags(s.flags);
+  const id = new URLSearchParams(location.search).get("meeting");
+  if (id) loading(api("/api/meetings/" + encodeURIComponent(id)));
+})();
+</script>
+</body>
+</html>
