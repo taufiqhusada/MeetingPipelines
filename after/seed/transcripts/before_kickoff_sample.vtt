@@ -1,0 +1,39 @@
+WEBVTT
+
+NOTE SAMPLE FIXTURE - synthetic transcript used to test the pipeline end to end.
+
+1
+00:00:01.000 --> 00:00:09.000
+<v Taufiq>Okay, kickoff for Meeting Pipelines. Goal is to save people time on context gathering before meetings.
+
+2
+00:00:09.500 --> 00:00:18.000
+<v Taufiq>Scope for this week is the backend only. Slack comes later.
+
+3
+00:00:18.500 --> 00:00:30.000
+<v Michael>Sources are coding agent logs, GitHub PRs and issues, Drive design docs, and meeting transcripts from Gmail.
+
+4
+00:00:30.500 --> 00:00:41.000
+<v Taufiq>I'll build the coding agent log connectors for Claude Code and Codex by Monday, plus the CLI that writes the run folder.
+
+5
+00:00:41.500 --> 00:00:52.000
+<v Michael>I'll set up the Google Cloud project and OAuth client for Gmail and Drive, and create a GitHub token, by Sunday.
+
+6
+00:00:52.500 --> 00:01:04.000
+<v George>I'll write the Slack wrapper spec and start the Slack bot that posts the brief into the team channel.
+
+7
+00:01:04.500 --> 00:01:15.000
+<v Taufiq>We also need secret redaction before anything goes to the LLM. Coding logs can contain API keys.
+
+8
+00:01:15.500 --> 00:01:24.000
+<v Michael>Open question: does the aggregator read briefs from Slack, or from a shared folder?
+
+9
+00:01:24.500 --> 00:01:30.000
+<v Taufiq>Let's decide that next sync. Also we should open GitHub issues to track each connector.

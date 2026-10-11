@@ -21,11 +21,11 @@ RECALL_REGION = os.getenv("RECALL_REGION", "us-west-2")
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "taufiqhusada/MeetingPipelines")
-# Seed team handles are placeholders; only assign issues once they are real collaborators.
+# Assign issues to team GitHub handles (they must be repo collaborators).
 GITHUB_ASSIGN = os.getenv("GITHUB_ASSIGN", "0") == "1"
 
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
-SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "#meeting-agent")
+SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "test-bot-features")
 
 GOOGLE_CREDENTIALS_FILE = Path(os.getenv("GOOGLE_CREDENTIALS_FILE", DATA_DIR / "google_credentials.json"))
 GOOGLE_TOKEN_FILE = Path(os.getenv("GOOGLE_TOKEN_FILE", DATA_DIR / "google_token.json"))

@@ -1,6 +1,7 @@
 """After-meeting pipeline: analyze -> store -> deliver human tasks -> queue agent tasks for approval."""
 import json
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 from . import config, db, executors, report
 from .analyze import analyze
@@ -93,11 +94,12 @@ def process(transcript: Transcript) -> dict:
     )
 
     # Agent tasks: wait for approval. Darwin search shows which external agent could take each one.
-    for t in a["agent_tasks"]:
+    with ThreadPoolExecutor() as pool:
+        matches = list(pool.map(lambda t: executors.darwin_search(t["capability_query"]), a["agent_tasks"]))
+    for t, darwin in zip(a["agent_tasks"], matches):
         db.execute(
             "INSERT INTO agent_tasks (meeting_id, title, kind, payload_json, darwin_json) VALUES (?,?,?,?,?)",
-            mid, t["title"], t["kind"], json.dumps(t),
-            json.dumps(executors.darwin_search(t["capability_query"])),
+            mid, t["title"], t["kind"], json.dumps(t), json.dumps(darwin),
         )
     return get_meeting(mid)
 
@@ -113,10 +115,16 @@ def decide(task_id: int, approve: bool) -> dict:
     mid, task = row["meeting_id"], json.loads(row["payload_json"])
     if row["kind"] == "schedule_meeting":
         result = executors.schedule_meeting(mid, task)
+        if result.get("ics"):
+            executors.slack_message(
+                mid, f"Next meeting: *{task['title']}* at {result['start']}. Invite attached.",
+                files=[str(config.ROOT / result["ics"].lstrip("/"))],
+            )
     elif row["kind"] == "meeting_report":
         url = report.build(get_meeting(mid))
         result = {"ok": True, "report": url}
-        executors.slack_message(mid, f"Meeting report is ready: {config.BASE_URL}{url}")
+        executors.slack_message(mid, "Meeting report attached (open in a browser).",
+                                files=[str(config.ROOT / url.lstrip("/"))])
     else:
         # No built-in executor (e.g. purchases): hand the Darwin matches to the requester.
         darwin = json.loads(row["darwin_json"] or "{}")

@@ -25,8 +25,8 @@ If no deadline was said, due_date is null. Do not invent deadlines.
 - goal_progress has one entry per previous goal, judged only from what was said in this meeting.
 - person_updates has one entry per team member who attended.
 - next_meeting_goals are the outcomes the team expects by the next meeting; the next meeting is compared against them.
-- capability_query is a short, generic verb phrase for the capability an outside agent would need, without names \
-or dates (e.g. "create a calendar meeting with attendees and send invites", "order pizza").
+- capability_query is 2-4 words, verb + object, naming the generic capability an outside agent would need, \
+without names or dates (e.g. "create calendar event", "create slides", "order pizza").
 - For schedule_meeting, attendees are team handles and start_datetime is ISO local time."""
 
 

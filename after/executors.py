@@ -3,6 +3,7 @@
 Everything goes through `outbox()` so the UI shows what was (or would have been) sent.
 """
 import json
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -67,26 +68,24 @@ def github_issue(meeting_id: str, task: dict) -> dict:
 
 # ---------------------------------------------------------------- Slack
 
-def slack_message(meeting_id: str, text: str, handle: str | None = None) -> dict:
-    """DM `handle` if we know their Slack id, otherwise post to the team channel."""
+def slack_message(meeting_id: str, text: str, handle: str | None = None, files: list[str] | None = None) -> dict:
+    """DM `handle` (by Slack username) if known, otherwise post to the team channel.
+
+    Sending goes through the Slack teammate's helper (src/slack/messaging.py), which resolves
+    usernames/channel names to IDs and opens DMs.
+    """
     user = _user(handle)
     target = user.get("slack_user_id") or config.SLACK_CHANNEL
     if handle and not user.get("slack_user_id"):
         text = f"*For {user.get('name', handle)}:*\n{text}"
 
     def send():
-        r = httpx.post(
-            "https://slack.com/api/chat.postMessage",
-            headers={"Authorization": f"Bearer {config.SLACK_BOT_TOKEN}"},
-            json={"channel": target, "text": text},
-            timeout=20,
-        )
-        data = r.json()
-        if not data.get("ok"):
-            raise RuntimeError(data.get("error"))
-        return data.get("ts")
+        from src.slack.messaging import send_message  # imported lazily: it needs SLACK_BOT_TOKEN at import
+        send_message(recipients=[target], text=text, files=files)
+        return "ok"
 
-    return outbox(meeting_id, "slack", target, text, send if config.SLACK_BOT_TOKEN else None)
+    body = text + (f"\n[files: {', '.join(files)}]" if files else "")
+    return outbox(meeting_id, "slack", target, body, send if config.SLACK_BOT_TOKEN else None)
 
 
 # ---------------------------------------------------------------- Calendar
@@ -142,21 +141,38 @@ def schedule_meeting(meeting_id: str, task: dict) -> dict:
 
 # ---------------------------------------------------------------- Darwin
 
+def _darwin_queries(query: str) -> list[str]:
+    """Darwin 500s on some longer phrasings; fall back to shorter verb + object forms."""
+    words = [w for w in query.split() if w.lower() not in {"a", "an", "the", "for", "of", "to"}]
+    out = [query]
+    for n in (3, 2):
+        short = " ".join(words[:n])
+        if len(words) > n and short not in out:
+            out.append(short)
+    return out
+
+
 def darwin_search(query: str, max_results: int = 3) -> dict:
     """Find agents on the agentic web that could do this task. Search only: we never act through Darwin."""
     headers = {"Content-Type": "application/json"}
     if config.DARWIN_API_KEY:
         headers["Authorization"] = f"Bearer {config.DARWIN_API_KEY}"
-    try:
-        for attempt in range(2):  # Darwin occasionally 500s; one retry is usually enough
+    data, error = None, None
+    for q in _darwin_queries(query):
+        try:
             r = httpx.post("https://darwin.so/api/v3/search", headers=headers,
-                           json={"query": query, "maxResults": max_results}, timeout=30)
-            if r.status_code < 500:
-                break
-        r.raise_for_status()
-        data = r.json()
-    except Exception as e:
-        return {"query": query, "error": f"Darwin search failed: {e}", "agents": []}
+                           json={"query": q, "maxResults": max_results}, timeout=30)
+            if r.status_code >= 500:
+                error = f"Darwin returned {r.status_code}"
+                time.sleep(1)
+                continue
+            r.raise_for_status()
+            data, query = r.json(), q
+            break
+        except Exception as e:
+            error = f"Darwin search failed: {e}"
+    if data is None:
+        return {"query": query, "error": error, "agents": []}
     resp = data.get("response") or {}
     agents = resp.get("agents") or []
     return {
