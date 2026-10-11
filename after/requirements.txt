@@ -7,3 +7,5 @@ python-dotenv>=1.0
 python-multipart>=0.0.9
 google-api-python-client>=2.140
 google-auth-oauthlib>=1.2
+certifi>=2024.0
+slack-bolt>=1.18,<2

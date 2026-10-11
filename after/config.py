@@ -2,7 +2,11 @@
 import os
 from pathlib import Path
 
+import certifi
 from dotenv import load_dotenv
+
+# python.org macOS builds ship without CA certs; urllib-based clients (slack_sdk) need this.
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env")
