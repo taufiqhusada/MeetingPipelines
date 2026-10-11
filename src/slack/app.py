@@ -1,30 +1,15 @@
-"""Minimal app mention responder using Socket Mode."""
+"""Compatibility entry point for the single MeetingPipelines Slack bot."""
 
-import os
+import sys
+from pathlib import Path
 
-from dotenv import load_dotenv
-from slack_bolt import App
-from slack_bolt.adapter.socket_mode import SocketModeHandler
+# Keep `python src/slack/app.py` working when launched from a checkout.
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-
-load_dotenv()
-
-app = App(token=os.environ["SLACK_BOT_TOKEN"])
-test_channel_id = os.getenv("SLACK_CHANNEL_TEST_BOT_FEATURES")
-
-
-@app.event("app_mention")
-def respond(event, say):
-    # When a test channel is configured, keep this example scoped to it.
-    if test_channel_id and event.get("channel") != test_channel_id:
-        return
-
-    say(
-        text="Hello! My local Python agent is running.",
-        thread_ts=event["ts"],
-    )
+from meetpipe.slack_bot import serve
 
 
 if __name__ == "__main__":
-    print("Agent is connecting to Slack...")
-    SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
+    serve()
