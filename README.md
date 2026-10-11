@@ -1,4 +1,4 @@
-# Charlotte
+# Charlotte: connect your work
 <img width="1351" height="837" alt="Screenshot 2026-10-11 at 4 46 24 PM" src="https://github.com/user-attachments/assets/013951d7-98af-4817-a01b-1aece428b614" />
 
 <img width="1484" height="854" alt="Screenshot 2026-10-11 at 4 48 03 PM" src="https://github.com/user-attachments/assets/92786669-1cf5-4b73-947d-d842d7a7c19c" />
