@@ -112,6 +112,10 @@ def from_transcriptonic(body: dict) -> Transcript:
         lines += [TranscriptLine(speaker=f"{n} (chat)", text=t) for n, t in _simple_blocks(chat) if t]
     if not lines:
         raise RuntimeError("TranscripTonic sent an empty transcript (were Google Meet captions on?)")
+    if config.TRANSCRIPT_SELF_NAME:
+        for l in lines:
+            if l.speaker in ("You", "You (chat)"):
+                l.speaker = l.speaker.replace("You", config.TRANSCRIPT_SELF_NAME)
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40] or "meet"
     return Transcript(
         meeting_id=f"{slug}-{started.strftime('%Y%m%d-%H%M')}",

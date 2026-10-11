@@ -40,7 +40,8 @@ def index():
 @app.get("/api/status")
 def status():
     return {"flags": config.flags(), "model": config.CLAUDE_MODEL, "dry_run": config.DRY_RUN,
-            "meetings": db.rows("SELECT id, title, date, source FROM meetings ORDER BY date DESC")}
+            "meetings": db.rows("SELECT id, title, date, source, created_at FROM meetings "
+                                "WHERE analysis_json IS NOT NULL ORDER BY created_at DESC LIMIT 15")}
 
 
 @app.get("/api/samples")

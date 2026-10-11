@@ -341,3 +341,10 @@ def test_transcriptonic_webhook_endpoint(monkeypatch):
     r = TestClient(app_module.app).post("/api/webhooks/transcriptonic", json=ADVANCED)
     assert r.status_code == 202 and r.json()["lines"] == 3
     assert processed == ["weekly-sync-20261011-1400"]
+
+
+def test_transcriptonic_you_becomes_self_name(monkeypatch):
+    monkeypatch.setattr(config, "TRANSCRIPT_SELF_NAME", "George Zhou")
+    body = {**ADVANCED, "transcript": [{"personName": "You", "timestamp": "2026-10-11T21:00:05.000Z",
+                                        "transcriptText": "I'll do it."}], "chatMessages": []}
+    assert transcripts.from_transcriptonic(body).lines[0].speaker == "George Zhou"

@@ -29,6 +29,7 @@
 <p class="muted">Transcript in → summary, progress vs. last meeting, human tasks routed, agent tasks awaiting approval.</p>
 
 <div id="flags" class="card"></div>
+<div class="card"><h2>Recent meetings <span class="muted" style="font-weight:normal">(new webhook meetings appear here automatically)</span></h2><div id="meetings" class="muted">None yet</div></div>
 
 <div class="grid">
   <div class="card">
@@ -135,8 +136,20 @@ function loadSample() {
   $("mid").value = s.name.replace(/\.[^.]+$/, "") + "-" + new Date().toISOString().slice(0, 10);
 }
 
+let knownMeetings = null;
+function renderMeetings(list) {
+  $("meetings").innerHTML = list.length ? list.map((x) =>
+    `<div><a href="?meeting=${encodeURIComponent(x.id)}" onclick="event.preventDefault(); loading(api('/api/meetings/${encodeURIComponent(x.id)}'))">${esc(x.title)}</a>
+     <span class="muted">· ${esc(x.date)} · ${esc(x.source)}${knownMeetings && !knownMeetings.has(x.id) ? " · <b>new</b>" : ""}</span></div>`).join("") : "None yet";
+}
+async function pollMeetings() {
+  try { renderMeetings((await fetch("/api/status").then((r) => r.json())).meetings); } catch (e) {}
+}
+setInterval(pollMeetings, 10000);
+
 (async () => {
   const s = await api("/api/status"); renderFlags(s.flags);
+  renderMeetings(s.meetings); knownMeetings = new Set(s.meetings.map((x) => x.id));
   samples = await api("/api/samples");
   $("sample").innerHTML = samples.map((x) => `<option>${esc(x.name)}</option>`).join("");
   const id = new URLSearchParams(location.search).get("meeting");
