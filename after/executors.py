@@ -78,6 +78,9 @@ def slack_message(meeting_id: str, text: str, handle: str | None = None, files: 
     target = user.get("slack_user_id") or config.SLACK_CHANNEL
     if handle and not user.get("slack_user_id"):
         text = f"*For {user.get('name', handle)}:*\n{text}"
+    if config.SLACK_ONLY_TO and target != config.SLACK_ONLY_TO:
+        text = f"_[test redirect: would go to {target}]_\n{text}"
+        target = config.SLACK_ONLY_TO
 
     def send():
         from src.slack.messaging import send_message  # imported lazily: it needs SLACK_BOT_TOKEN at import

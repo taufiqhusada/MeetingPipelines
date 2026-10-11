@@ -34,7 +34,8 @@
   <div class="card">
     <h2>1 · Transcript</h2>
     <div class="row"><button onclick="runDemo()">Run demo meeting</button></div>
-    <p class="muted">Or paste <code>Speaker: text</code> lines:</p>
+    <p class="muted">Or paste <code>Speaker: text</code> lines / a .vtt file, or load a sample:</p>
+    <div class="row" style="margin:0 0 8px"><select id="sample" style="flex:1;padding:7px;border-radius:6px"></select><button class="ghost" onclick="loadSample()">Load sample</button></div>
     <input id="mid" placeholder="meeting id, e.g. sync-2026-10-18">
     <textarea id="text" placeholder="Sam: Let's start..."></textarea>
     <div class="row"><button onclick="runText()">Process transcript</button></div>
@@ -108,8 +109,17 @@ function renderFlags(flags) {
   $("flags").innerHTML = flags.length ? "<h2>⚠️ Setup flags</h2><ul>" + flags.map((f) => `<li><b>${esc(f.key)}</b>: ${esc(f.impact)}</li>`).join("") + "</ul>" : "<b>All integrations configured.</b>";
 }
 
+let samples = [];
+function loadSample() {
+  const s = samples.find((x) => x.name === $("sample").value); if (!s) return;
+  $("text").value = s.text;
+  $("mid").value = s.name.replace(/\.[^.]+$/, "") + "-" + new Date().toISOString().slice(0, 10);
+}
+
 (async () => {
   const s = await api("/api/status"); renderFlags(s.flags);
+  samples = await api("/api/samples");
+  $("sample").innerHTML = samples.map((x) => `<option>${esc(x.name)}</option>`).join("");
   const id = new URLSearchParams(location.search).get("meeting");
   if (id) loading(api("/api/meetings/" + encodeURIComponent(id)));
 })();

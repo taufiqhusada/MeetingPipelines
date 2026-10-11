@@ -30,6 +30,8 @@ GITHUB_ASSIGN = os.getenv("GITHUB_ASSIGN", "0") == "1"
 
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
 SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "test-bot-features")
+# Testing: redirect every Slack message (channel posts and DMs) to this one Slack username.
+SLACK_ONLY_TO = os.getenv("SLACK_ONLY_TO", "")
 
 GOOGLE_CREDENTIALS_FILE = Path(os.getenv("GOOGLE_CREDENTIALS_FILE", DATA_DIR / "google_credentials.json"))
 GOOGLE_TOKEN_FILE = Path(os.getenv("GOOGLE_TOKEN_FILE", DATA_DIR / "google_token.json"))
@@ -52,6 +54,8 @@ def flags() -> list[dict]:
         out.append({"key": "RECALL_API_KEY", "impact": "Recall.ai bot disabled; use a pasted/uploaded transcript."})
     if not SLACK_BOT_TOKEN:
         out.append({"key": "SLACK_BOT_TOKEN", "impact": "Slack messages go to the outbox only (waiting on Slack teammate)."})
+    if SLACK_ONLY_TO:
+        out.append({"key": "SLACK_ONLY_TO", "impact": f"All Slack messages are redirected to {SLACK_ONLY_TO}."})
     if not GITHUB_TOKEN:
         out.append({"key": "GITHUB_TOKEN", "impact": "GitHub issues go to the outbox only."})
     if not GOOGLE_TOKEN_FILE.exists():

@@ -1,0 +1,19 @@
+Taufiq: Okay, quick sync before the demo. Let's check last week's goals first, then decide the demo flow.
+Taufiq: My brief generator is done and merged, brief.json is in main now.
+Michael: Slack approval buttons are half done. The buttons render, but clicking them doesn't call the After API yet. I'm blocked on a public URL, Slack can't reach localhost.
+George: The After agent is running on real transcripts with Claude now. Calendar is connected. Recall is still not integrated, I parked it.
+Taufiq: Okay. Decision: for the demo we use a pasted transcript, not a live Recall bot. Too risky on hackathon wifi.
+Michael: Agreed.
+George: Then I'll make the After page read Taufiq's brief.json so the progress check uses real goals. I can do that by tomorrow.
+Michael: I'll set up an ngrok tunnel so Slack buttons can reach the API, tonight.
+Taufiq: Somebody needs to write the README section for judges. And someone should double-check the Darwin search results before we present.
+George: I can take the README.
+Taufiq: Thanks. The Darwin check, let's leave it open for now.
+Michael: We should also decide whether the bot posts in the main channel or only DMs during the demo.
+Taufiq: Let's decide that at the next meeting.
+Taufiq: Meeting agent, schedule a dry run of the demo on Tuesday at 10am for 45 minutes with all three of us.
+George: Also set up a quick check-in with the judges' mentor sometime this week, we don't have a time yet.
+Michael: Meeting agent, make a slide-style visual summary of this meeting for the pitch.
+Taufiq: And can the agent find us a cheap HDMI to USB-C adapter for the projector? Don't buy it, just find options.
+Michael: Last thing, the agent should look up how other teams handle Slack interactivity without a public URL.
+Taufiq: Great, that's it. Thanks everyone.

@@ -43,6 +43,13 @@ def status():
             "meetings": db.rows("SELECT id, title, date, source FROM meetings ORDER BY date DESC")}
 
 
+@app.get("/api/samples")
+def samples():
+    """Fake transcripts for testing features (pasted-text and VTT formats)."""
+    folder = config.SEED_DIR / "transcripts"
+    return [{"name": f.name, "text": f.read_text()} for f in sorted(folder.glob("*")) if f.suffix in (".txt", ".vtt")]
+
+
 @app.post("/api/process/demo")
 def process_demo():
     return _run(pipeline.process, transcripts.demo())
